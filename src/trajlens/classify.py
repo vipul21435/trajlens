@@ -13,7 +13,8 @@ never_tested        the run has at least one edit and no test run at all;
 untested_final_edit the run has test runs but none after the last edit;
                     evidence: the last edit step and the last test step
 gave_up             no submit step and the final patch is empty, or the last
-                    step is an error; evidence: the last step
+                    step is an error (exit code, or observation text when the
+                    format has no exit codes); evidence: the last step
 tool_error_cascade  an error streak of at least ``cascade_min`` [4] steps;
                     evidence: the streak's step ids
 context_blow_up     a single observation of at least ``blowup_chars`` [20000]
@@ -96,8 +97,13 @@ def classify_run(
 
     if steps:
         last = steps[-1]
-        if not m.submitted and (m.patch_empty or last.is_error):
-            why = "empty patch" if m.patch_empty else f"last step exit code {last.exit_code}"
+        if not m.submitted and (m.patch_empty or m.last_step_error):
+            if m.patch_empty:
+                why = "empty patch"
+            elif last.exit_code is not None:
+                why = f"last step exit code {last.exit_code}"
+            else:
+                why = "last step observation reads as an error"
             out.append(Finding("gave_up", f"no submit step and {why}", [last.index]))
 
     if m.max_error_streak >= cascade_min:

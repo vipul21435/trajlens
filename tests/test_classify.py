@@ -3,6 +3,7 @@ from pathlib import Path
 from trajlens.adapters import load
 from trajlens.classify import FAILURE_CLASSES, classify_run
 from trajlens.metrics import run_metrics
+from trajlens.model import Step, Trajectory
 
 FX = Path(__file__).parent / "fixtures"
 
@@ -82,3 +83,10 @@ def test_all_labels_documented():
         assert lab in c.__doc__
     for f in labels("loop.jsonl").values():
         assert f.to_dict()["label"] in FAILURE_CLASSES
+
+
+def test_gave_up_on_inferred_last_error():
+    steps = [Step(index=0, tool="shell", command="python r.py", observation="KeyError: 'a'")]
+    t = Trajectory("t", steps, patch="diff --git a/x.py b/x.py\n")
+    f = {x.label: x for x in classify_run(t, run_metrics(t))}
+    assert "observation reads as an error" in f["gave_up"].detail

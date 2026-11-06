@@ -132,3 +132,54 @@ def test_run_metrics_loop_fixture():
     assert m.exact_loops[0].step_ids == [2, 3, 4, 5, 6]
     assert m.tests_after_last_edit is False
     assert m.max_error_streak == 5
+
+
+def test_observation_looks_failed():
+    from trajlens.metrics import observation_looks_failed
+
+    assert observation_looks_failed('Traceback (most recent call last):\n  File "x"')
+    assert observation_looks_failed("ModuleNotFoundError: No module named 'x'")
+    assert observation_looks_failed("bash: foo: command not found")
+    assert observation_looks_failed("cat: a.txt: No such file or directory")
+    assert observation_looks_failed("Your proposed edit has introduced new syntax error(s).")
+    assert not observation_looks_failed("All 3 tests passed")
+    assert not observation_looks_failed("")
+
+
+def test_step_errors_modes():
+    import pytest
+
+    from trajlens.metrics import step_errors
+
+    no_codes = [
+        Step(index=0, tool="shell", command="python a.py", observation="ValueError: bad"),
+        Step(index=1, tool="shell", command="ls", observation="a.py"),
+    ]
+    assert step_errors(no_codes, "auto") == [True, False]
+    assert step_errors(no_codes, "never") == [False, False]
+    mixed = [
+        Step(index=0, tool="shell", command="x", observation="ValueError: bad", exit_code=0),
+        Step(index=1, tool="shell", command="y", observation="ValueError: bad"),
+    ]
+    # auto trusts the format once any exit code is recorded
+    assert step_errors(mixed, "auto") == [False, False]
+    assert step_errors(mixed, "always") == [False, True]
+    with pytest.raises(ValueError):
+        step_errors(mixed, "sometimes")
+
+
+TB = "Traceback (most recent call last):"
+
+
+def test_run_metrics_inferred_errors():
+    steps = [
+        Step(index=0, tool="shell", command="python r.py", observation=TB),
+        Step(index=1, tool="shell", command="python r.py", observation="NameError: x"),
+        Step(index=2, tool="shell", command="ls", observation="r.py"),
+    ]
+    m = run_metrics(Trajectory("t", steps))
+    assert m.error_steps == 2 and m.error_step_ids == [0, 1]
+    assert m.errors_inferred and not m.last_step_error
+    assert m.max_error_streak == 2
+    m2 = run_metrics(Trajectory("t", steps), infer_errors="never")
+    assert m2.error_steps == 0 and not m2.errors_inferred

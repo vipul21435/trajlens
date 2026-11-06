@@ -24,6 +24,47 @@ _TEST_PATH_RE = re.compile(
 _DIFF_PATH_RE = re.compile(r"^diff --git a/(\S+) b/(\S+)$", re.MULTILINE)
 _PLUS_PATH_RE = re.compile(r"^\+\+\+ (?:b/)?(\S+)$", re.MULTILINE)
 
+# Observation text that marks a failed step when the format records no exit
+# code (SWE-agent .traj files, for one). Each pattern is a message printed by
+# the Python interpreter, a POSIX shell or the SWE-agent editor itself.
+ERROR_PATTERNS: tuple[str, ...] = (
+    r"Traceback \(most recent call last\)",
+    r"^\w*(Error|Exception): ",
+    r": command not found$",
+    r": No such file or directory$",
+    r"Your proposed edit has introduced new syntax error",
+    r"^Usage: ",
+)
+_ERROR_RE = re.compile("|".join(f"(?:{p})" for p in ERROR_PATTERNS), re.MULTILINE)
+INFER_MODES = ("auto", "always", "never")
+
+
+def observation_looks_failed(observation: str) -> bool:
+    """True when the observation text matches one of :data:`ERROR_PATTERNS`."""
+    return bool(_ERROR_RE.search(observation or ""))
+
+
+def step_errors(steps: list[Step], infer: str = "auto") -> list[bool]:
+    """Whether each step failed.
+
+    A recorded exit code always decides. For a step without one, ``infer``
+    says what to do: ``never`` counts it as a success; ``always`` reads the
+    observation text; ``auto`` (the default) reads the observation text only
+    when no step of the run carries an exit code, so a format that records
+    exit codes is never second-guessed.
+    """
+    if infer not in INFER_MODES:
+        raise ValueError(f"infer must be one of {INFER_MODES}, got {infer!r}")
+    any_code = any(s.exit_code is not None for s in steps)
+    use_text = infer == "always" or (infer == "auto" and not any_code)
+    out = []
+    for s in steps:
+        if s.exit_code is not None:
+            out.append(s.exit_code != 0)
+        else:
+            out.append(use_text and observation_looks_failed(s.observation))
+    return out
+
 
 def normalise_command(command: str) -> str:
     """Collapse whitespace and lower-case a command for duplicate detection."""
@@ -66,6 +107,9 @@ class RunMetrics:
     near_loops: list[Loop]
     looped_steps: int
     error_steps: int
+    error_step_ids: list[int]
+    errors_inferred: bool
+    last_step_error: bool
     error_rate: float
     max_error_streak: int
     error_streak_steps: list[int]
@@ -164,12 +208,18 @@ def find_loops(
     return exact, near
 
 
-def error_streaks(steps: list[Step]) -> list[list[int]]:
-    """Maximal runs of consecutive error steps, as lists of step ids."""
+def error_streaks(steps: list[Step], errors: list[bool] | None = None) -> list[list[int]]:
+    """Maximal runs of consecutive error steps, as lists of step ids.
+
+    ``errors`` gives the failure flag of each step; by default it is the
+    recorded exit code (:attr:`Step.is_error`).
+    """
+    if errors is None:
+        errors = [s.is_error for s in steps]
     streaks: list[list[int]] = []
     cur: list[int] = []
-    for s in steps:
-        if s.is_error:
+    for s, failed in zip(steps, errors, strict=True):
+        if failed:
             cur.append(s.index)
         elif cur:
             streaks.append(cur)
@@ -201,8 +251,12 @@ def run_metrics(
     window: int = 6,
     min_repeats: int = 3,
     near_threshold: float = 0.9,
+    infer_errors: str = "auto",
 ) -> RunMetrics:
-    """Compute every per-run metric for one trajectory."""
+    """Compute every per-run metric for one trajectory.
+
+    ``infer_errors`` is passed to :func:`step_errors`.
+    """
     steps = traj.steps
     n = len(steps)
     mix = Counter(s.tool for s in steps)
@@ -213,8 +267,10 @@ def run_metrics(
     test_runs = len(test_ids)
     exact, near = find_loops(steps, window, min_repeats, near_threshold)
     looped = {i for lp in exact + near for i in lp.step_ids}
-    errors = [s.index for s in steps if s.is_error]
-    streaks = error_streaks(steps)
+    failed = step_errors(steps, infer_errors)
+    errors = [s.index for s, f in zip(steps, failed, strict=True) if f]
+    inferred = any(f and s.exit_code is None for s, f in zip(steps, failed, strict=True))
+    streaks = error_streaks(steps, failed)
     longest = max(streaks, key=len) if streaks else []
     obs_lengths = [len(s.observation) for s in steps]
     largest_idx = max(range(n), key=lambda i: obs_lengths[i]) if n else None
@@ -247,6 +303,9 @@ def run_metrics(
         near_loops=near,
         looped_steps=len(looped),
         error_steps=len(errors),
+        error_step_ids=errors,
+        errors_inferred=inferred,
+        last_step_error=bool(failed[-1]) if failed else False,
         error_rate=(len(errors) / n) if n else 0.0,
         max_error_streak=len(longest),
         error_streak_steps=list(longest),

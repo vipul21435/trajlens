@@ -14,7 +14,7 @@ from pathlib import Path
 from trajlens import __version__
 from trajlens.adapters import FORMATS, load
 from trajlens.classify import FAILURE_CLASSES, classify_run
-from trajlens.metrics import run_metrics
+from trajlens.metrics import INFER_MODES, run_metrics
 
 
 def analyze_paths(
@@ -27,12 +27,13 @@ def analyze_paths(
     cascade_min: int = 4,
     blowup_chars: int = 20000,
     growth_ratio: float = 5.0,
+    infer_errors: str = "auto",
 ) -> dict:
     """Analyse every file and return the report as a plain dict."""
     runs = []
     for p in paths:
         traj = load(p, fmt)
-        m = run_metrics(traj, window, min_repeats, near_threshold)
+        m = run_metrics(traj, window, min_repeats, near_threshold, infer_errors)
         findings = classify_run(traj, m, loop_min_steps, cascade_min, blowup_chars, growth_ratio)
         runs.append(
             {
@@ -119,6 +120,12 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--cascade-min", type=int, default=4, help="error streak that is a cascade")
     a.add_argument("--blowup-chars", type=int, default=20000, help="observation size for blow-up")
     a.add_argument("--growth-ratio", type=float, default=5.0, help="observation growth for blow-up")
+    a.add_argument(
+        "--infer-errors",
+        default="auto",
+        choices=INFER_MODES,
+        help="read failures from observation text when a step has no exit code",
+    )
     return p
 
 
@@ -135,6 +142,7 @@ def main(argv: list[str] | None = None) -> int:
             args.cascade_min,
             args.blowup_chars,
             args.growth_ratio,
+            args.infer_errors,
         )
     except (OSError, ValueError) as exc:
         print(f"trajlens: {exc}", file=sys.stderr)
