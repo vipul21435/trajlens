@@ -27,8 +27,13 @@ def test_message_does_not_take_run_output():
 def test_uncaused_observation_pairs_only_with_the_action_before_it():
     events = [
         {"id": 1, "source": "agent", "action": "run", "args": {"command": "ls"}},
-        {"id": 2, "source": "agent", "observation": "run", "content": "a.py",
-         "extras": {"exit_code": 0}},
+        {
+            "id": 2,
+            "source": "agent",
+            "observation": "run",
+            "content": "a.py",
+            "extras": {"exit_code": 0},
+        },
         {"id": 3, "source": "agent", "action": "run", "args": {"command": "ls b"}},
         {"id": 4, "source": "agent", "action": "run", "args": {"command": "ls c"}},
         {"id": 5, "source": "agent", "observation": "run", "cause": 4, "content": "c"},

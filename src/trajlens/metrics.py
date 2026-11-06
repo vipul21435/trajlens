@@ -366,7 +366,9 @@ def error_streaks(steps: list[Step], errors: list[bool] | None = None) -> list[l
 def observation_growth(steps: list[Step]) -> float | None:
     """Ratio of mean observation length in the last third to the first third.
 
-    None when there are fewer than three steps.
+    None when there are fewer than three steps, or when the first third has
+    no observation text at all (the ratio is undefined; returning infinity
+    would make the JSON report invalid).
     """
     if len(steps) < 3:
         return None
@@ -376,7 +378,7 @@ def observation_growth(steps: list[Step]) -> float | None:
     head_mean = sum(head) / len(head)
     tail_mean = sum(tail) / len(tail)
     if head_mean == 0:
-        return None if tail_mean == 0 else float("inf")
+        return None
     return tail_mean / head_mean
 
 

@@ -52,8 +52,10 @@ def test_values_that_used_to_crash_now_parse():
     )
     assert len(t.steps) == 1
     t = parse_openhands(
-        [{"id": [1], "action": "run", "args": {"command": "ls"}},
-         {"cause": [1], "observation": "run", "content": "x"}],
+        [
+            {"id": [1], "action": "run", "args": {"command": "ls"}},
+            {"cause": [1], "observation": "run", "content": "x"},
+        ],
         "x",
     )
     assert t.steps[0].command == "ls"
@@ -78,13 +80,30 @@ def test_compare_bad_report(tmp_path, capsys, doc):
 
 json_values = st.recursive(
     st.none() | st.booleans() | st.integers() | st.floats() | st.text(max_size=8),
-    lambda inner: st.lists(inner, max_size=4) | st.dictionaries(st.text(max_size=8), inner,
-                                                                 max_size=4),
+    lambda inner: (
+        st.lists(inner, max_size=4) | st.dictionaries(st.text(max_size=8), inner, max_size=4)
+    ),
     max_leaves=12,
 )
 step_keys = st.sampled_from(
-    ["action", "command", "observation", "exit_code", "timestamp", "tokens_in", "thought",
-     "tool", "id", "cause", "args", "message_type", "role", "content", "source", "extras"]
+    [
+        "action",
+        "command",
+        "observation",
+        "exit_code",
+        "timestamp",
+        "tokens_in",
+        "thought",
+        "tool",
+        "id",
+        "cause",
+        "args",
+        "message_type",
+        "role",
+        "content",
+        "source",
+        "extras",
+    ]
 )
 records = st.dictionaries(step_keys, json_values, max_size=6)
 
@@ -102,4 +121,3 @@ def test_adapters_raise_only_value_error(items):
             parse()
         except ValueError:
             pass
-

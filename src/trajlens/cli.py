@@ -319,7 +319,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"trajlens: {exc}", file=sys.stderr)
         return 2
     if args.json:
-        args.json.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        args.json.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8")
     if args.html:
         args.html.write_text(render_html(report, args.title), encoding="utf-8")
     if args.csv:

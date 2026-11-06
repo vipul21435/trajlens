@@ -171,7 +171,8 @@ Steps; tool mix; edits and failed edits; test runs and failed test runs; edits p
 step of the first and last edit and test; whether a test ran after the last edit; error steps,
 error rate (error steps / steps) and the longest streak of consecutive failed steps; total
 observation characters, the largest observation, and observation growth (mean observation
-length of the last third of steps divided by the first third); files in the final patch,
+length of the last third of steps divided by the first third; undefined, shown as `null`,
+when the first third has no observation text); files in the final patch,
 which of them are test files (by path: `tests/`, `test_*.py`, `*_test.*`, `*.spec.*`,
 `conftest.py`, ...), and which the patch creates; whether a submit step exists; duration from
 timestamps; token totals.

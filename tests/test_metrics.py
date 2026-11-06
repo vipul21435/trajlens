@@ -78,7 +78,7 @@ def test_observation_growth():
     s = mk(["a"] * 3, obs=["", "", ""])
     assert observation_growth(s) is None
     s = mk(["a"] * 3, obs=["", "", "zz"])
-    assert observation_growth(s) == float("inf")
+    assert observation_growth(s) is None  # undefined, not inf: inf is not JSON
 
 
 def test_patch_paths_and_test_detection():
