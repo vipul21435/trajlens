@@ -228,7 +228,9 @@ def render_html(report: dict, title: str = "trajlens report") -> str:
     """Render a report dict from :mod:`trajlens.analysis` as one HTML page."""
     a = report["aggregate"]
     runs = report["runs"]
-    data = json.dumps(report).replace("</", "<\\/")
+    # Every "<" becomes \u003c, which is still the same JSON string, so no
+    # "</script" or "<!--" can end or re-enter the element early.
+    data = json.dumps(report).replace("<", "\\u003c")
     details = "".join(_run_detail(i, r) for i, r in enumerate(runs))
     return (
         "<!DOCTYPE html><html lang=en><head><meta charset=utf-8>"
