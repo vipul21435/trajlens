@@ -167,3 +167,6 @@ def test_audit_draws_seeded_sample(capsys):
     assert main(["audit", *paths, "--label", "looping", "--n", "1", "--seed", "3"]) == 0
     assert capsys.readouterr().out == first
     assert main(["audit", "missing.jsonl", "--label", "looping"]) == 2
+    args = ["audit", *paths, "--label", "never_tested", "--no-script-tests"]
+    assert main(args) == 0
+    assert "carry never_tested" in capsys.readouterr().out

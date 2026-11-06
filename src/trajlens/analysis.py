@@ -17,6 +17,7 @@ from trajlens.adapters import load
 from trajlens.classify import FAILURE_CLASSES, classify_run
 from trajlens.metrics import run_metrics, step_errors
 from trajlens.model import Trajectory
+from trajlens.scripts import promote_script_runs
 
 
 @dataclass
@@ -34,6 +35,7 @@ class Options:
     infer_errors: str = "auto"
     edit_resets: bool = True
     same_observation: bool = True
+    script_tests: bool = True
 
 
 def step_rows(traj: Trajectory, infer_errors: str = "auto", head: int = 160) -> list[dict]:
@@ -63,8 +65,12 @@ def analyze_run(
     """Metrics, findings and outcome of one run as a plain dict.
 
     With ``steps`` the dict also holds :func:`step_rows` under ``steps``.
+    With ``opts.script_tests`` (the default) runs of scripts the agent created
+    count as test runs (:func:`trajlens.scripts.promote_script_runs`).
     """
     o = opts or Options()
+    if o.script_tests:
+        traj = promote_script_runs(traj)
     m = run_metrics(
         traj,
         window=o.window,

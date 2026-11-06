@@ -114,6 +114,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="count test files the patch creates as edited tests",
     )
     a.add_argument(
+        "--no-script-tests",
+        action="store_true",
+        help="do not count runs of scripts the agent created as test runs",
+    )
+    a.add_argument(
         "--loop-any-observation",
         action="store_true",
         help="group repeated commands even when their observations differ",
@@ -142,6 +147,7 @@ def build_parser() -> argparse.ArgumentParser:
     au.add_argument("--seed", type=int, default=0)
     au.add_argument("--format", default="auto", choices=("auto", *FORMATS))
     au.add_argument("--width", type=int, default=100)
+    au.add_argument("--no-script-tests", action="store_true", help="as for analyze")
     c = sub.add_parser("convert", help="rewrite trajectory files as generic JSONL")
     c.add_argument("paths", nargs="+", type=Path)
     c.add_argument("--format", default="auto", choices=("auto", *FORMATS))
@@ -176,7 +182,9 @@ def format_run(run: dict, width: int = 100) -> str:
     return "\n".join(lines)
 
 
-def audit(paths: list[Path], fmt: str, label: str, n: int, seed: int) -> tuple[int, list[dict]]:
+def audit(
+    paths: list[Path], fmt: str, label: str, n: int, seed: int, opts: Options | None = None
+) -> tuple[int, list[dict]]:
     """Draw up to ``n`` runs carrying ``label`` with ``random.Random(seed).sample``.
 
     Runs are considered in the order of ``paths``; returns the number of runs
@@ -184,7 +192,7 @@ def audit(paths: list[Path], fmt: str, label: str, n: int, seed: int) -> tuple[i
     """
     import random
 
-    runs = [analyze_run(load(p, fmt), Options(), str(p), steps=True) for p in paths]
+    runs = [analyze_run(load(p, fmt), opts, str(p), steps=True) for p in paths]
     hits = [r for r in runs if any(f["label"] == label for f in r["findings"])]
     drawn = random.Random(seed).sample(hits, min(n, len(hits)))
     return len(hits), drawn
@@ -224,7 +232,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "audit":
         try:
-            total, drawn = audit(args.paths, args.format, args.label, args.n, args.seed)
+            opts = Options(script_tests=not args.no_script_tests)
+            total, drawn = audit(args.paths, args.format, args.label, args.n, args.seed, opts)
         except (OSError, ValueError) as exc:
             print(f"trajlens: {exc}", file=sys.stderr)
             return 2
@@ -253,6 +262,7 @@ def main(argv: list[str] | None = None) -> int:
             infer_errors=args.infer_errors,
             edit_resets=not args.no_edit_reset,
             same_observation=not args.loop_any_observation,
+            script_tests=not args.no_script_tests,
             include_new_tests=args.include_new_tests,
         )
         report = analyze_paths(
