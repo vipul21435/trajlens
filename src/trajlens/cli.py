@@ -13,6 +13,7 @@ from pathlib import Path
 from trajlens import __version__
 from trajlens.adapters import FORMATS
 from trajlens.analysis import Options, aggregate, analyze_paths
+from trajlens.html import render_html
 from trajlens.metrics import INFER_MODES
 
 __all__ = ["aggregate", "analyze_paths", "build_parser", "format_text", "main"]
@@ -56,6 +57,10 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("paths", nargs="+", type=Path)
     a.add_argument("--format", default="auto", choices=("auto", *FORMATS))
     a.add_argument("--json", type=Path, help="write the full report as JSON here")
+    a.add_argument(
+        "--html", type=Path, help="write a self-contained HTML report here (adds step rows)"
+    )
+    a.add_argument("--title", default="trajlens report", help="title of the HTML report")
     a.add_argument("--window", type=int, default=6, help="loop window in steps")
     a.add_argument("--min-repeats", type=int, default=3, help="repeats that make a loop")
     a.add_argument("--near-threshold", type=float, default=0.9, help="near-duplicate ratio")
@@ -85,12 +90,14 @@ def main(argv: list[str] | None = None) -> int:
             growth_ratio=args.growth_ratio,
             infer_errors=args.infer_errors,
         )
-        report = analyze_paths(args.paths, args.format, opts)
+        report = analyze_paths(args.paths, args.format, opts, steps=args.html is not None)
     except (OSError, ValueError) as exc:
         print(f"trajlens: {exc}", file=sys.stderr)
         return 2
     if args.json:
         args.json.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    if args.html:
+        args.html.write_text(render_html(report, args.title), encoding="utf-8")
     print(format_text(report))
     return 0
 

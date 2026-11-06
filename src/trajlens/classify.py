@@ -55,6 +55,20 @@ def _short(text: str, limit: int = 80) -> str:
     return first[:limit] + (" ..." if more else "")
 
 
+# One line per class, shown in the HTML report next to the counts.
+RULES: dict[str, str] = {
+    "looping": "an exact or near-duplicate command loop of at least loop_min_steps steps",
+    "never_tested": "at least one edit and no test run",
+    "untested_final_edit": "test runs exist but none after the last edit",
+    "gave_up": "no submit step, and an empty patch or a failed last step",
+    "tool_error_cascade": "at least cascade_min consecutive failed steps",
+    "context_blow_up": "one observation of at least blowup_chars characters, or observation "
+    "growth of at least growth_ratio",
+    "edited_tests": "the final patch touches a test file",
+    "empty_submission": "a submit step with an empty patch",
+}
+
+
 @dataclass
 class Finding:
     label: str

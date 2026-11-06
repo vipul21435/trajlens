@@ -15,7 +15,7 @@ from pathlib import Path
 from trajlens import __version__
 from trajlens.adapters import load
 from trajlens.classify import FAILURE_CLASSES, classify_run
-from trajlens.metrics import run_metrics
+from trajlens.metrics import run_metrics, step_errors
 from trajlens.model import Trajectory
 
 
@@ -33,14 +33,40 @@ class Options:
     infer_errors: str = "auto"
 
 
-def analyze_run(traj: Trajectory, opts: Options | None = None, path: str = "") -> dict:
-    """Metrics, findings and outcome of one run as a plain dict."""
+def step_rows(traj: Trajectory, infer_errors: str = "auto", head: int = 160) -> list[dict]:
+    """A compact view of every step for the HTML report.
+
+    Commands are cut to 400 characters and observations to their first
+    ``head`` characters; the full observation length is kept.
+    """
+    failed = step_errors(traj.steps, infer_errors)
+    return [
+        {
+            "index": s.index,
+            "tool": s.tool,
+            "command": s.command[:400],
+            "exit_code": s.exit_code,
+            "error": f,
+            "observation_chars": len(s.observation),
+            "observation_head": s.observation[:head],
+        }
+        for s, f in zip(traj.steps, failed, strict=True)
+    ]
+
+
+def analyze_run(
+    traj: Trajectory, opts: Options | None = None, path: str = "", steps: bool = False
+) -> dict:
+    """Metrics, findings and outcome of one run as a plain dict.
+
+    With ``steps`` the dict also holds :func:`step_rows` under ``steps``.
+    """
     o = opts or Options()
     m = run_metrics(traj, o.window, o.min_repeats, o.near_threshold, o.infer_errors)
     findings = classify_run(
         traj, m, o.loop_min_steps, o.cascade_min, o.blowup_chars, o.growth_ratio
     )
-    return {
+    out = {
         "path": path,
         "source_format": traj.source_format,
         "task_id": traj.task_id,
@@ -50,17 +76,24 @@ def analyze_run(traj: Trajectory, opts: Options | None = None, path: str = "") -
         "metrics": m.to_dict(),
         "findings": [f.to_dict() for f in findings],
     }
+    if steps:
+        out["steps"] = step_rows(traj, o.infer_errors)
+    return out
 
 
-def analyze_trajectories(trajs: Iterable[Trajectory], opts: Options | None = None) -> dict:
+def analyze_trajectories(
+    trajs: Iterable[Trajectory], opts: Options | None = None, steps: bool = False
+) -> dict:
     """Analyse loaded trajectories and return the full report."""
-    runs = [analyze_run(t, opts) for t in trajs]
+    runs = [analyze_run(t, opts, steps=steps) for t in trajs]
     return {"version": __version__, "runs": runs, "aggregate": aggregate(runs)}
 
 
-def analyze_paths(paths: list[Path], fmt: str = "auto", opts: Options | None = None) -> dict:
+def analyze_paths(
+    paths: list[Path], fmt: str = "auto", opts: Options | None = None, steps: bool = False
+) -> dict:
     """Load every file in ``fmt`` (or detect it) and analyse it."""
-    runs = [analyze_run(load(p, fmt), opts, str(p)) for p in paths]
+    runs = [analyze_run(load(p, fmt), opts, str(p), steps) for p in paths]
     return {"version": __version__, "runs": runs, "aggregate": aggregate(runs)}
 
 
