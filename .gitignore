@@ -8,3 +8,4 @@ dist/
 node_modules/
 .ruff_cache/
 trajlens-example/
+.hypothesis/

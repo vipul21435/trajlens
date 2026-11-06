@@ -4,9 +4,12 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from trajlens.adapters.chat import parse_chat
 from trajlens.adapters.generic import step_from_record
+from trajlens.adapters.minisweagent import parse_minisweagent
 from trajlens.adapters.openhands import parse_openhands
 from trajlens.adapters.sweagent import parse_sweagent
+from trajlens.adapters.toolcalls import parse_toolcalls
 from trajlens.cli import main
 
 BAD = {
@@ -103,6 +106,11 @@ step_keys = st.sampled_from(
         "content",
         "source",
         "extras",
+        "tool_calls",
+        "tool_call_id",
+        "text",
+        "function",
+        "name",
     ]
 )
 records = st.dictionaries(step_keys, json_values, max_size=6)
@@ -116,6 +124,11 @@ def test_adapters_raise_only_value_error(items):
         lambda: parse_sweagent({"trajectory": items}, "x"),
         lambda: parse_sweagent({"history": items}, "x"),
         lambda: parse_openhands(items, "x"),
+        lambda: parse_minisweagent(items, "x"),
+        lambda: parse_minisweagent({"messages": items}, "x"),
+        lambda: parse_toolcalls(items, "x"),
+        lambda: parse_toolcalls({"trajectory": items}, "x"),
+        lambda: parse_chat({"trajectory": items}, "x"),
     ):
         try:
             parse()
