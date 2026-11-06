@@ -44,11 +44,36 @@ from trajlens.model import (
     Trajectory,
 )
 
-_TEST_RE = re.compile(
-    r"(^|[\s/;&|])(pytest|py\.test|unittest|tox|nox|jest|vitest|mocha|cargo\s+test|go\s+test|"
-    r"npm\s+(run\s+)?test|yarn\s+test|pnpm\s+test|make\s+test|phpunit|rspec|gradle\s+test|"
-    r"mvn\s+test|ctest)\b"
+# A test runner as the command word of one simple command. Leading variable
+# assignments and wrappers (env, time, timeout N, uv run, npx, python -m,
+# coverage run -m, ...) are skipped first, so ``PYTHONPATH=. python -m pytest``
+# is a test run while ``pip install pytest`` or ``grep pytest`` is not.
+_RUNNER_PREFIX_RE = re.compile(
+    r"^(?:(?:[A-Za-z_]\w*=\S*|env|time|nice|xvfb-run|timeout\s+\S+)\s+)*"
+    r"(?:(?:uv|poetry|pipenv|pdm|hatch)\s+run\s+(?:-\S+\s+)*|npx\s+|bundle\s+exec\s+)?"
+    r"(?:(?:\S*/)?python[0-9.]*\s+(?:-[A-Za-z]+\s+)*-m\s+|coverage\s+run\s+(?:-\S+\s+)*-m\s+)?"
 )
+_RUNNER_RE = re.compile(
+    r"^(?:\S*/)?(pytest|py\.test|unittest|tox|nox|jest|vitest|mocha|cargo\s+test|go\s+test|"
+    r"npm\s+(run\s+)?test|yarn\s+test|pnpm\s+test|make\s+test|phpunit|rspec|gradle\s+test|"
+    r"\./gradlew\s+test|mvn\s+test|ctest)\b"
+    r"|^(?:(?:\S*/)?python[0-9.]*\s+(?:-\S+\s+)*)?(?:\S*/)?(?:manage\.py\s+test|runtests\.py)\b"
+)
+_SEGMENT_RE = re.compile(r"&&|\|\||[;|\n]")
+
+
+def runs_test_runner(command: str) -> bool:
+    """True when some simple command in ``command`` starts with a test runner."""
+    for part in _SEGMENT_RE.split(command or ""):
+        part = part.strip().lstrip("\"'(").strip()
+        if part.startswith(("bash -c ", "sh -c ")):
+            part = part.split(None, 2)[2].lstrip("\"'").strip() if len(part.split()) > 2 else ""
+        rest = _RUNNER_PREFIX_RE.sub("", part, count=1)
+        if _RUNNER_RE.match(rest):
+            return True
+    return False
+
+
 # Running a test or reproduction script directly, for example
 # ``python reproduce.py`` or ``python3 -u tests/test_io.py``. The
 # SWE-agent default prompt tells the agent to write a reproduction script and
@@ -89,6 +114,9 @@ _ACTION_CLASS = {
     "search": SEARCH,
     "find": SEARCH,
     "grep": SEARCH,
+    "search_dir": SEARCH,
+    "search_file": SEARCH,
+    "find_file": SEARCH,
     "bash": SHELL,
     "shell": SHELL,
     "run": SHELL,
@@ -161,7 +189,7 @@ def classify_tool(action: str, command: str) -> str:
     while _CD_PREFIX_RE.match(text):
         text = _CD_PREFIX_RE.sub("", text, count=1)
     shell = strip_heredocs(text)
-    if _TEST_RE.search(shell) or _SCRIPT_TEST_RE.search(shell):
+    if runs_test_runner(shell) or _SCRIPT_TEST_RE.search(shell):
         return TEST
     if is_shell_write(text):
         return EDIT

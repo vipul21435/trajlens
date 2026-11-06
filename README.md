@@ -166,7 +166,10 @@ Known action names decide first (`edit`, `create`, `str_replace_editor`, `open`,
 OpenHands `edit`/`write`/`read`/`finish`). A shell command is classified by regular
 expressions: test runners (`pytest`, `tox`, `go test`, `cargo test`, `npm test`, `jest`,
 `mvn test`, ...) and running a test or reproduction script directly (`python reproduce.py`,
-`python tests/test_io.py`) are `test`; `sed -i`, `patch`, `git apply` and shell writes
+`python tests/test_io.py`) are `test`. A runner counts only as the command word of one of the
+chained commands, after variable assignments and wrappers such as `env`, `timeout N`, `uv run`,
+`npx` and `python -m`, so `pip install pytest` or `grep pytest` is not a test run; Django's
+`manage.py test` and `runtests.py` are runners too; `sed -i`, `patch`, `git apply` and shell writes
 (`cat > f.py << 'EOF'`, `echo x >> f`, `cat << EOF | tee f`, when every command on the first
 line is `cat`, `echo`, `printf` or `tee` and one of them writes a file other than /dev/null)
 are `edit`; other pagers and `cat` are `read`; here-document bodies are file contents and are
@@ -436,18 +439,18 @@ trajlens analyze --format toolcalls oh-sample/row*.json --group-by exit_status
 | mean test runs | 15.0 |
 | mean error rate | 0.093 |
 | mean first edit step (runs with an edit) | 24.8 |
-| mean first test step (runs with a test) | 7.9 |
+| mean first test step (runs with a test) | 8.3 |
 | runs with a loop | 20 |
 | runs testing after the last edit | 56 |
 | runs submitted | 53 |
 | runs with an empty patch | 0 |
 | runs with no finding | 0 |
-| failed steps by tool class | 354: test 191, search 82, shell 36, edit 24, read 21 |
-| tool mix (share of steps) | edit 16.8%, test 24.3%, read 25.6%, search 14.8%, shell 11.6%, submit 1.4%, other 5.4% |
+| failed steps by tool class | 354: test 192, search 82, shell 35, edit 24, read 21 |
+| tool mix (share of steps) | edit 16.8%, test 24.2%, read 25.6%, search 14.8%, shell 11.7%, submit 1.4%, other 5.4% |
 
 Shell exit codes here are recorded by OpenHands and editor failures come from its `ERROR`
 replies; nothing is inferred from free text. This agent behaves very differently from the
-SWE-agent runs above: it runs a test at step 7.9 on average and edits only at step 24.8, and
+SWE-agent runs above: it runs a test at step 8.3 on average and edits only at step 24.8, and
 56 of the 60 runs test after their last edit. Class counts (runs carrying the class, resolved
 of 29 / unresolved of 31): looping 5 / 3, untested_final_edit 0 / 4, edited_tests 2 / 1,
 never_tested, gave_up, tool_error_cascade and empty_submission 0 / 0. Only
