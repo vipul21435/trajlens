@@ -61,7 +61,7 @@ def _tool_for(command: str) -> tuple[str, str]:
     return classify_tool("bash", command), "bash"
 
 
-def parse_minisweagent(data, run_id: str) -> Trajectory:
+def parse_minisweagent(data: object, run_id: str) -> Trajectory:
     """Build a Trajectory from a parsed mini-swe-agent JSON document."""
     info: dict = {}
     if isinstance(data, dict):

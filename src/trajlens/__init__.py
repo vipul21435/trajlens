@@ -1,8 +1,30 @@
-"""trajlens: read coding-agent trajectories, measure behaviour, classify failures."""
+"""trajlens: read coding-agent trajectories, measure behaviour, classify failures.
 
-from trajlens.classify import classify_run
-from trajlens.metrics import run_metrics
-from trajlens.model import Step, Trajectory
+Typical use::
+
+    from trajlens import Options, analyze_trajectories, load
+
+    report = analyze_trajectories([load("run.traj")], Options(), steps=True)
+    print(report["aggregate"]["runs_with_finding"])
+"""
 
 __version__ = "0.1.0"
-__all__ = ["Step", "Trajectory", "classify_run", "run_metrics", "__version__"]
+
+from trajlens.adapters import load  # noqa: E402
+from trajlens.analysis import Options, analyze_trajectories  # noqa: E402
+from trajlens.classify import Finding, classify_run  # noqa: E402
+from trajlens.metrics import RunMetrics, run_metrics  # noqa: E402
+from trajlens.model import Step, Trajectory  # noqa: E402
+
+__all__ = [
+    "Finding",
+    "Options",
+    "RunMetrics",
+    "Step",
+    "Trajectory",
+    "__version__",
+    "analyze_trajectories",
+    "classify_run",
+    "load",
+    "run_metrics",
+]

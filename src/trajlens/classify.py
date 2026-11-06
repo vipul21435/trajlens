@@ -82,6 +82,8 @@ RULES: dict[str, str] = {
 
 @dataclass
 class Finding:
+    """One failure class on one run: its label, a readable detail and the evidence step ids."""
+
     label: str
     detail: str
     step_ids: list[int] = field(default_factory=list)

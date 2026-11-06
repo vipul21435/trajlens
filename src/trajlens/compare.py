@@ -93,6 +93,7 @@ def compare_reports(a: object, b: object) -> list[dict]:
 
 
 def format_comparison(rows: list[dict], name_a: str = "A", name_b: str = "B") -> str:
+    """The rows of :func:`compare_reports` as a fixed-width text table."""
     head = f"{'class':20s} {name_a:>16s} {name_b:>16s}   {name_b} - {name_a} [95% interval]"
     lines = [head]
     for r in rows:

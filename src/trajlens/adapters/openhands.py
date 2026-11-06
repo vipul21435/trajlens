@@ -119,7 +119,7 @@ def _next_free_observation(events: list[dict], pos: int) -> dict | None:
     return None
 
 
-def parse_openhands(data, run_id: str) -> Trajectory:
+def parse_openhands(data: object, run_id: str) -> Trajectory:
     """Build a Trajectory from a parsed OpenHands event list."""
     patch = ""
     events = data

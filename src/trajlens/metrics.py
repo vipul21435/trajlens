@@ -99,6 +99,20 @@ class Loop:
 
 @dataclass
 class RunMetrics:
+    """Behaviour metrics of one run; ``to_dict`` gives the ``metrics`` block of the JSON report.
+
+    Step ids are 0-based positions in the run's step list. Counts are steps
+    unless named otherwise; ``*_chars`` are characters of observation text;
+    ``duration_seconds`` is the latest timestamp minus the earliest; ``tokens_*``
+    are totals when the format records them, else None. ``*_step`` fields are
+    None when no such step exists, and ``tests_after_last_edit`` is None when
+    the run has no edit. ``error_rate`` is error steps / steps (0.0 for an
+    empty run); ``observation_growth`` is the mean observation length of the
+    last third of steps over the first third (None when undefined).
+    ``patch_*`` fields describe the final patch: every touched path, the test
+    files among them, and the test files it creates.
+    """
+
     run_id: str
     steps: int
     tool_mix: dict[str, int]

@@ -98,7 +98,7 @@ def _steps_from_history(history: list) -> list[Step]:
     return steps
 
 
-def parse_sweagent(data: dict, run_id: str) -> Trajectory:
+def parse_sweagent(data: object, run_id: str) -> Trajectory:
     """Build a Trajectory from a parsed ``.traj`` object."""
     if not isinstance(data, dict):
         raise ValueError("SWE-agent .traj must be a JSON object")

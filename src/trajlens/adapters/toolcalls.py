@@ -94,7 +94,7 @@ def _first(data: dict, *keys: str):
     return None
 
 
-def parse_toolcalls(data, run_id: str) -> Trajectory:
+def parse_toolcalls(data: object, run_id: str) -> Trajectory:
     """Build a Trajectory from a parsed function-calling transcript."""
     meta: dict = {}
     messages = data

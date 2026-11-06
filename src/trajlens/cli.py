@@ -43,6 +43,7 @@ __all__ = [
 
 
 def format_text(report: dict) -> str:
+    """The plain-text summary ``trajlens analyze`` prints: one block per run, then totals."""
     lines = []
     for r in report["runs"]:
         m = r["metrics"]
@@ -97,6 +98,7 @@ FORMAT_HELP = "input format; auto detects it from the file"
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """The argument parser of the ``trajlens`` command with all its sub-commands."""
     p = argparse.ArgumentParser(prog="trajlens", description=DESCRIPTION)
     p.add_argument("--version", action="version", version=f"trajlens {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -255,6 +257,7 @@ def convert(paths: list[Path], fmt: str, out: Path) -> list[Path]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the command line; returns the exit status (0 ok, 1 --fail-on hit, 2 error)."""
     args = build_parser().parse_args(argv)
     if args.cmd == "show":
         try:
