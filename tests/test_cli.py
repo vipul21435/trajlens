@@ -141,3 +141,16 @@ def test_fail_on(capsys):
     assert "failing: 1 runs" in capsys.readouterr().err
     assert main(["analyze", loop, "--fail-on", "edited_tests"]) == 0
     assert main(["analyze", loop, "--fail-on", "nonsense"]) == 2
+
+
+def test_csv_output(tmp_path):
+    import csv
+
+    out = tmp_path / "runs.csv"
+    paths = [str(FX / "loop.jsonl"), str(FX / "good.jsonl")]
+    assert main(["analyze", *paths, "--csv", str(out)]) == 0
+    rows = list(csv.DictReader(out.open()))
+    assert [r["run_id"] for r in rows] == ["loop", "good"]
+    assert rows[0]["looping"] == "1" and rows[1]["looping"] == "0"
+    assert rows[0]["source_format"] == "generic" and rows[0]["resolved"] == ""
+    assert rows[1]["first_test_step"] == "3"

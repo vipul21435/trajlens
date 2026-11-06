@@ -183,6 +183,31 @@ def aggregate(runs: list[dict], group_by: str | None = None) -> dict:
     return out
 
 
+CSV_FIELDS = (
+    "run_id", "path", "source_format", "task_id", "model", "resolved", "exit_status", "steps",
+    "edits", "failed_edits", "test_runs", "failed_test_runs", "first_edit_step",
+    "first_test_step", "tests_after_last_edit", "looped_steps", "error_steps", "error_rate",
+    "errors_inferred", "max_error_streak", "observation_chars", "observation_growth",
+    "largest_observation_chars",
+    "submitted", "patch_empty", "duration_seconds", "tokens_in", "tokens_out",
+)  # fmt: skip
+
+
+def write_csv(report: dict, path: str | Path) -> None:
+    """One row per run: the scalar metrics, then one 0/1 column per failure class."""
+    import csv
+
+    with Path(path).open("w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow([*CSV_FIELDS, *FAILURE_CLASSES])
+        for r in report["runs"]:
+            m = r["metrics"]
+            labels = {f["label"] for f in r["findings"]}
+            row = [m[k] if k in m else r.get(k) for k in CSV_FIELDS]
+            row = ["" if v is None else v for v in row]
+            w.writerow([*row, *(int(c in labels) for c in FAILURE_CLASSES)])
+
+
 def _runs_with(runs: list[dict]) -> dict[str, int]:
     c = Counter(lab for r in runs for lab in {f["label"] for f in r["findings"]})
     return {lab: c.get(lab, 0) for lab in FAILURE_CLASSES}

@@ -15,7 +15,14 @@ from pathlib import Path
 from trajlens import __version__
 from trajlens.adapters import FORMATS, load
 from trajlens.adapters.generic import dump_generic
-from trajlens.analysis import GROUP_KEYS, Options, aggregate, analyze_paths, analyze_run
+from trajlens.analysis import (
+    GROUP_KEYS,
+    Options,
+    aggregate,
+    analyze_paths,
+    analyze_run,
+    write_csv,
+)
 from trajlens.classify import FAILURE_CLASSES
 from trajlens.html import render_html
 from trajlens.metrics import INFER_MODES
@@ -81,6 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument(
         "--html", type=Path, help="write a self-contained HTML report here (adds step rows)"
     )
+    a.add_argument("--csv", type=Path, help="write one row of metrics and classes per run here")
     a.add_argument("--title", default="trajlens report", help="title of the HTML report")
     a.add_argument(
         "--fail-on",
@@ -221,6 +229,8 @@ def main(argv: list[str] | None = None) -> int:
         args.json.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     if args.html:
         args.html.write_text(render_html(report, args.title), encoding="utf-8")
+    if args.csv:
+        write_csv(report, args.csv)
     print(format_text(report))
     if args.fail_on:
         wanted = set(FAILURE_CLASSES) if args.fail_on == "any" else set(args.fail_on.split(","))
