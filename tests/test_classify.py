@@ -35,8 +35,20 @@ def test_edited_tests_and_blow_up():
     assert "tests/test_parse.py" in f["edited_tests"].detail
     assert f["edited_tests"].step_ids == []
     # raise the floor and the blow-up disappears
-    f2 = labels("edited_tests.jsonl", blowup_chars=10**6, growth_min_chars=10**6)
+    f2 = labels("edited_tests.jsonl", blowup_chars=10**6)
     assert set(f2) == {"edited_tests"}
+
+
+def test_context_total_crossing_step():
+    steps = [
+        Step(index=i, tool="read", command=f"cat f{i}", observation="x" * 300) for i in range(5)
+    ]
+    t = Trajectory("t", steps, patch="diff --git a/a.py b/a.py\n")
+    f = {x.label: x for x in classify_run(t, run_metrics(t), context_chars=1000)}
+    assert f["context_blow_up"].step_ids == [3]
+    assert "reach 1000 chars at step 3" in f["context_blow_up"].detail
+    f = {x.label: x for x in classify_run(t, run_metrics(t), context_chars=1000, blowup_chars=300)}
+    assert f["context_blow_up"].step_ids == [0, 3]
 
 
 def test_near_loop_threshold_flag():

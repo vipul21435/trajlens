@@ -17,11 +17,12 @@ gave_up             no submit step and the final patch is empty, or the last
                     format has no exit codes); evidence: the last step
 tool_error_cascade  an error streak of at least ``cascade_min`` [4] steps;
                     evidence: the streak's step ids
-context_blow_up     a single observation of at least ``blowup_chars`` [20000]
-                    characters, or observation growth of at least
-                    ``growth_ratio`` [5.0] when the largest observation has at
-                    least ``growth_min_chars`` [2000] characters; evidence: the
-                    largest observation step
+context_blow_up     the observations together reach ``context_chars`` [60000]
+                    characters (everything the agent has been shown so far
+                    stays in its prompt), or a single observation has at least
+                    ``blowup_chars`` [20000] characters; evidence: the step
+                    where the running total crosses the limit and the largest
+                    observation step
 edited_tests        the final patch touches a test file; evidence: none (patch
                     level), the file names are listed in the detail
 empty_submission    the run submitted and the patch is empty; evidence: the
@@ -62,8 +63,8 @@ RULES: dict[str, str] = {
     "untested_final_edit": "test runs exist but none after the last edit",
     "gave_up": "no submit step, and an empty patch or a failed last step",
     "tool_error_cascade": "at least cascade_min consecutive failed steps",
-    "context_blow_up": "one observation of at least blowup_chars characters, or observation "
-    "growth of at least growth_ratio",
+    "context_blow_up": "observations reach context_chars characters in total, or one "
+    "observation has at least blowup_chars",
     "edited_tests": "the final patch touches a test file",
     "empty_submission": "a submit step with an empty patch",
 }
@@ -85,8 +86,7 @@ def classify_run(
     loop_min_steps: int = 4,
     cascade_min: int = 4,
     blowup_chars: int = 20000,
-    growth_ratio: float = 5.0,
-    growth_min_chars: int = 2000,
+    context_chars: int = 60000,
 ) -> list[Finding]:
     """Apply every rule to one run and return the findings in rule order."""
     out: list[Finding] = []
@@ -138,19 +138,23 @@ def classify_run(
         )
 
     big = m.largest_observation_chars >= blowup_chars
-    grown = (
-        m.observation_growth is not None
-        and m.observation_growth >= growth_ratio
-        and m.largest_observation_chars >= growth_min_chars
-    )
-    if big or grown:
+    total = 0
+    crossed = None
+    for step in steps:
+        total += len(step.observation)
+        if total >= context_chars:
+            crossed = step.index
+            break
+    if big or crossed is not None:
         parts = []
+        if crossed is not None:
+            parts.append(f"observations reach {context_chars} chars at step {crossed}")
         if big:
             parts.append(f"largest observation {m.largest_observation_chars} chars")
-        if grown:
-            parts.append(f"observation growth x{m.observation_growth:.1f}")
-        ids = [m.largest_observation_step] if m.largest_observation_step is not None else []
-        out.append(Finding("context_blow_up", ", ".join(parts), ids))
+        ids = [crossed] if crossed is not None else []
+        if big and m.largest_observation_step not in ids:
+            ids.append(m.largest_observation_step)
+        out.append(Finding("context_blow_up", ", ".join(parts), sorted(ids)))
 
     if m.patch_touches_tests:
         out.append(Finding("edited_tests", "patch touches " + ", ".join(m.patch_test_files), []))

@@ -69,7 +69,9 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--loop-min-steps", type=int, default=4, help="loop size that is a failure")
     a.add_argument("--cascade-min", type=int, default=4, help="error streak that is a cascade")
     a.add_argument("--blowup-chars", type=int, default=20000, help="observation size for blow-up")
-    a.add_argument("--growth-ratio", type=float, default=5.0, help="observation growth for blow-up")
+    a.add_argument(
+        "--context-chars", type=int, default=60000, help="total observation size for blow-up"
+    )
     a.add_argument(
         "--no-edit-reset",
         action="store_true",
@@ -128,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
             loop_min_steps=args.loop_min_steps,
             cascade_min=args.cascade_min,
             blowup_chars=args.blowup_chars,
-            growth_ratio=args.growth_ratio,
+            context_chars=args.context_chars,
             infer_errors=args.infer_errors,
             edit_resets=not args.no_edit_reset,
         )
