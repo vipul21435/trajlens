@@ -1,6 +1,7 @@
 """Command line entry point.
 
-trajlens analyze RUN.jsonl [RUN2.jsonl ...] [--json OUT] [--format generic]
+trajlens analyze RUN [RUN ...] [--json OUT] [--html OUT] [--format NAME]
+trajlens convert RUN [RUN ...] --out DIR [--format NAME]
 """
 
 from __future__ import annotations
@@ -11,12 +12,13 @@ import sys
 from pathlib import Path
 
 from trajlens import __version__
-from trajlens.adapters import FORMATS
+from trajlens.adapters import FORMATS, load
+from trajlens.adapters.generic import dump_generic
 from trajlens.analysis import Options, aggregate, analyze_paths
 from trajlens.html import render_html
 from trajlens.metrics import INFER_MODES
 
-__all__ = ["aggregate", "analyze_paths", "build_parser", "format_text", "main"]
+__all__ = ["aggregate", "analyze_paths", "build_parser", "convert", "format_text", "main"]
 
 
 def format_text(report: dict) -> str:
@@ -74,11 +76,45 @@ def build_parser() -> argparse.ArgumentParser:
         choices=INFER_MODES,
         help="read failures from observation text when a step has no exit code",
     )
+    c = sub.add_parser("convert", help="rewrite trajectory files as generic JSONL")
+    c.add_argument("paths", nargs="+", type=Path)
+    c.add_argument("--format", default="auto", choices=("auto", *FORMATS))
+    c.add_argument("--out", type=Path, required=True, help="directory for the .jsonl files")
     return p
+
+
+def _safe_name(run_id: str) -> str:
+    keep = "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in run_id)
+    return keep.strip(".") or "run"
+
+
+def convert(paths: list[Path], fmt: str, out: Path) -> list[Path]:
+    """Write each file as ``out/<run_id>.jsonl``; a repeated run id gets a numeric suffix."""
+    out.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    for p in paths:
+        traj = load(p, fmt)
+        base = _safe_name(traj.run_id)
+        target = out / f"{base}.jsonl"
+        n = 1
+        while target in written:
+            n += 1
+            target = out / f"{base}-{n}.jsonl"
+        dump_generic(traj, target)
+        written.append(target)
+    return written
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.cmd == "convert":
+        try:
+            written = convert(args.paths, args.format, args.out)
+        except (OSError, ValueError) as exc:
+            print(f"trajlens: {exc}", file=sys.stderr)
+            return 2
+        print(f"wrote {len(written)} files to {args.out}")
+        return 0
     try:
         opts = Options(
             window=args.window,

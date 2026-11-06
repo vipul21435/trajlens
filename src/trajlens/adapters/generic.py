@@ -11,6 +11,9 @@ Recognised keys (all optional except ``action`` or ``command``):
 ``timestamp``     seconds since the epoch, float
 ``tokens_in``     prompt tokens for the step
 ``tokens_out``    completion tokens for the step
+``tool``          optional tool class (edit, test, read, search, shell,
+                  submit, other); when given it is used as is, otherwise the
+                  class is derived from ``action`` and ``command``
 
 A line with ``"type": "meta"`` carries run level fields: ``run_id``,
 ``task_id``, ``model``, ``patch`` (the final diff as a string),
@@ -27,7 +30,18 @@ import json
 import re
 from pathlib import Path
 
-from trajlens.model import EDIT, OTHER, READ, SEARCH, SHELL, SUBMIT, TEST, Step, Trajectory
+from trajlens.model import (
+    EDIT,
+    OTHER,
+    READ,
+    SEARCH,
+    SHELL,
+    SUBMIT,
+    TEST,
+    TOOL_CLASSES,
+    Step,
+    Trajectory,
+)
 
 _TEST_RE = re.compile(
     r"(^|[\s/;&|])(pytest|py\.test|unittest|tox|nox|jest|vitest|mocha|cargo\s+test|go\s+test|"
@@ -129,9 +143,12 @@ def step_from_record(index: int, rec: dict) -> Step:
     """Build one Step from a generic JSONL record."""
     action = str(rec.get("action", "") or "")
     command = str(rec.get("command", "") or "")
+    tool = rec.get("tool")
+    if tool not in TOOL_CLASSES:
+        tool = classify_tool(action, command)
     return Step(
         index=index,
-        tool=classify_tool(action, command),
+        tool=tool,
         command=command,
         thought=str(rec.get("thought", "") or ""),
         observation=str(rec.get("observation", "") or ""),
@@ -177,3 +194,33 @@ def load_generic(path: str | Path) -> Trajectory:
             traj.steps.append(step_from_record(index, rec))
             index += 1
     return traj
+
+
+def step_record(step: Step) -> dict:
+    """The generic JSONL record of one step; empty and unknown fields are left out."""
+    rec: dict = {"action": step.raw_action, "tool": step.tool, "command": step.command}
+    for key in ("thought", "observation"):
+        if getattr(step, key):
+            rec[key] = getattr(step, key)
+    for key in ("exit_code", "timestamp", "tokens_in", "tokens_out"):
+        if getattr(step, key) is not None:
+            rec[key] = getattr(step, key)
+    return rec
+
+
+def dump_generic(traj: Trajectory, path: str | Path) -> None:
+    """Write one trajectory as a generic JSONL file that :func:`load_generic` reads back."""
+    meta: dict = {"type": "meta", "run_id": traj.run_id}
+    if traj.task_id:
+        meta["task_id"] = traj.task_id
+    if traj.model:
+        meta["model"] = traj.model
+    if traj.extra.get("exit_status"):
+        meta["exit_status"] = traj.extra["exit_status"]
+    if traj.resolved is not None:
+        meta["resolved"] = traj.resolved
+    meta["patch"] = traj.patch
+    with Path(path).open("w", encoding="utf-8") as fh:
+        fh.write(json.dumps(meta) + "\n")
+        for step in traj.steps:
+            fh.write(json.dumps(step_record(step)) + "\n")
