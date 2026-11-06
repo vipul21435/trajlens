@@ -32,6 +32,14 @@ _TEST_RE = re.compile(
     r"npm\s+(run\s+)?test|yarn\s+test|pnpm\s+test|make\s+test|phpunit|rspec|gradle\s+test|"
     r"mvn\s+test|ctest)\b"
 )
+# Running a test or reproduction script directly, for example
+# ``python reproduce.py`` or ``python3 -u tests/test_io.py``. The
+# SWE-agent default prompt tells the agent to write a reproduction script and
+# rerun it after the fix, so for that family this is the usual check.
+_SCRIPT_TEST_RE = re.compile(
+    r"(^|[\s/;&|])python[0-9.]*\s+(-\S+\s+)*(\S*/)?"
+    r"(test_\w*|\w*_test|tests?|reproduce\w*|repro\w*)\.py\b"
+)
 _EDIT_RE = re.compile(
     r"^\s*(edit|str_replace_editor|str_replace_based_edit_tool|create|insert|"
     r"write|write_file|apply_patch|sed\s+-i|patch\b|git\s+apply)"
@@ -70,7 +78,9 @@ def classify_tool(action: str, command: str) -> str:
     """Map an action name and its command to one tool class.
 
     The action name wins when it is a known editor, reader or submit action.
-    A shell action is looked at by its command: a test runner is ``test``, an
+    A shell action is looked at by its command: a test runner, or a python
+    test or reproduction script (``test_*.py``, ``*_test.py``,
+    ``reproduce*.py``, ``repro*.py``), is ``test``, an
     in-place edit is ``edit``, a pager or cat is ``read``, grep/find is
     ``search``, anything else is ``shell``.
     """
@@ -80,7 +90,7 @@ def classify_tool(action: str, command: str) -> str:
     if known is not None and known != SHELL:
         return known
     text = cmd if cmd else name
-    if _TEST_RE.search(text):
+    if _TEST_RE.search(text) or _SCRIPT_TEST_RE.search(text):
         return TEST
     if _EDIT_RE.match(text):
         return EDIT
