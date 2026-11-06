@@ -106,6 +106,7 @@ stays `None`.
 | `minisweagent` | mini-swe-agent `.traj.json` (message list, or object with `messages` and `info`); exit code from `<returncode>` | `*.traj.json`, or role/content message lists |
 | `openhands` | OpenHands event list (`action`/`observation` events linked by `cause`), exit code from `extras.exit_code`, ISO timestamps, cumulative token usage turned into per-step counts | a JSON list of events, or an object with `events` |
 | `chat` | a model transcript: messages with `role` (`assistant`/`ai` for the agent, `user`/`tool` for observations) and `content` or `text`; the command is the last fenced block of each agent turn, as SWE-agent's thought-action parser takes it | never guessed; pass `--format chat` |
+| `toolcalls` | a function-calling transcript: `assistant` messages with `tool_calls` (`function.name`, `function.arguments`), `tool` replies matched by `tool_call_id`; one step per call; shell exit code from OpenHands' `[Command finished with exit code N]` line, editor replies starting with `ERROR` count as failures | never guessed; pass `--format toolcalls` |
 
 Generic JSONL: one step per line with any of `thought`, `action`, `command`, `observation`,
 `exit_code`, `timestamp` (epoch seconds), `tokens_in`, `tokens_out`, and optionally `tool`
@@ -113,9 +114,10 @@ Generic JSONL: one step per line with any of `thought`, `action`, `command`, `ob
 `model`, `patch`, `exit_status` and `resolved` (true or false); a line with
 `"type": "patch"` carries the final diff.
 
-The OpenHands adapter was written against the `event_to_dict` serialisation in the OpenHands
-source and tested on a hand-written event list; it has not been run on a published OpenHands
-trajectory set (see Limitations).
+The `openhands` adapter reads the event-stream serialisation (`event_to_dict` in the OpenHands
+source) and has only been tested on a hand-written event list. Published OpenHands runs are
+usually distributed as function-calling transcripts instead; those are read with `toolcalls`,
+which is what the OpenHands results below use.
 
 ### Tool classes
 
@@ -163,10 +165,34 @@ matched characters and T the total length of both strings, at or above `--near-t
 between two repeats of a non-edit command ends the group: rerunning the same test after
 changing the code is the edit-test cycle, not a loop. Repeated edits are still grouped,
 because an edit that keeps failing to apply is exactly the loop to catch.
-`--no-edit-reset` turns this off. On the 400-run sample below, the edit reset takes resolved
-runs labelled `looping` from 16 of 76 to 4 of 76 and unresolved runs from 149 of 324 to 116
-of 324 (compare `trajlens analyze --format chat nebius-sample/row*.json` with and without
-`--no-edit-reset`).
+`--no-edit-reset` turns this off.
+
+A repeat joins a group only if its observation also looks the same: the first 300 characters
+of its observation must be at least `--near-threshold` similar (same ratio) to those of the
+group's first step. Paging through a file with `scroll_down`, or reading several files under
+one long directory, repeats a command but brings new information each time; the same edit
+rejected with the same error, or the same search with the same empty answer, does not.
+`--loop-any-observation` turns this off.
+
+Both refinements came from reading findings on the real sample below, and their effect on the
+`looping` class over its 400 runs is (`trajlens analyze --format chat nebius-sample/row*.json`
+with the flags shown):
+
+| flags | resolved runs with looping (of 76) | unresolved runs with looping (of 324) |
+| --- | --- | --- |
+| `--no-edit-reset --loop-any-observation` | 16 | 149 |
+| `--loop-any-observation` | 4 | 116 |
+| `--no-edit-reset` | 4 | 108 |
+| defaults | 1 | 94 |
+
+A hand check of the defaults: 20 `looping` findings drawn at random (seed 2026) from the 75
+held-out runs that carry one were read step by step with `trajlens show`. 19 were repeats
+that brought nothing new: the same edit rejected for the same syntax error up to 24 times,
+`find. -name ...` (a typo answered by `command not found`) 262 times, the same file opened or
+the same `find_file` issued again and again. The twentieth was a `grep` for one function over
+four different directories, each returning nothing; it is a systematic search rather than a
+stuck agent, so the near-duplicate rule still over-reaches when commands share a long path.
+One reader, no second rater: treat this as a sanity check, not a measured precision.
 
 ### Failure classes
 
@@ -198,14 +224,17 @@ had at least 61065 characters of observations) and is then checked on the 300 ro
 
 ## Results on real public data
 
+### SWE-agent: 400 runs from nebius/SWE-agent-trajectories
+
 Data: 400 runs drawn from
 [nebius/SWE-agent-trajectories](https://huggingface.co/datasets/nebius/SWE-agent-trajectories)
 (80,036 SWE-agent runs on GitHub issues, with the final patch, the framework's exit status,
 and whether the task's tests passed on the patch; licence CC BY 4.0, checked on the dataset
 page). The sample is 100 random offsets with seed 0, four consecutive rows each, read through
 the public datasets-server rows endpoint; the test log column is dropped. 76 of the 400 runs
-are resolved. No row is committed to this repository; the script downloads them (about
-26 MB).
+are resolved. No row is committed to this repository; the script downloads them (26 MB).
+The 100 rows with the lowest offsets are the ones the defaults were looked at on ("tuning");
+the other 300 are held out.
 
 ```
 uv run python scripts/fetch_nebius_sample.py --out nebius-sample
@@ -213,8 +242,8 @@ uv run --with matplotlib python scripts/real_data_report.py nebius-sample --char
 trajlens analyze --format chat nebius-sample/row*.json --json report.json --html report.html
 ```
 
-The last command, on all 400 files including the HTML report, took 2.9 s wall clock on the
-machine used here (`time`, one run). The tables are the output of the second command, unchanged.
+The last command, on all 400 files including the 9 MB HTML report, took 3.1 s wall clock on
+the machine used here (`time`, one run). The tables are the output of the second command.
 
 Behaviour over all 400 runs, default options:
 
@@ -228,21 +257,24 @@ Behaviour over all 400 runs, default options:
 | mean error rate (inferred) | 0.195 |
 | mean first edit step (runs with an edit) | 2.3 |
 | mean first test step (runs with a test) | 4.6 |
-| runs with a loop | 182 |
+| runs with a loop | 120 |
 | runs testing after the last edit | 209 |
 | runs submitted | 267 |
 | runs with an empty patch | 49 |
-| runs with no finding | 128 |
-| tool mix (share of steps) | edit 33.8%, test 12.0%, read 17.9%, search 21.9%, shell 11.8%, submit 2.7% |
+| runs with no finding | 138 |
+| failed steps by tool class | 2920: edit 1315, test 692, search 575, shell 306, read 32 |
+| tool mix (share of steps) | edit 33.8%, test 12.0%, read 17.9%, search 22.5%, shell 11.2%, submit 2.7% |
 
 "Runs with a loop" counts any loop of three or more repeats; the `looping` class below needs
-four.
+four. A third of all steps are edits, 3.3 of the 8.5 edits per run failed, and edits are 1,315
+of the 2,920 failed steps: in this data the editor rejecting an edit is the most common way
+a step fails.
 
 Share of runs carrying each class, resolved against unresolved (95 % Wilson intervals):
 
 | class | resolved runs (n=76) | unresolved runs (n=324) |
 | --- | --- | --- |
-| looping | 4/76 = 5.3% [2.1%, 12.8%] | 116/324 = 35.8% [30.8%, 41.2%] |
+| looping | 1/76 = 1.3% [0.2%, 7.1%] | 94/324 = 29.0% [24.3%, 34.2%] |
 | never_tested | 21/76 = 27.6% [18.8%, 38.6%] | 88/324 = 27.2% [22.6%, 32.3%] |
 | untested_final_edit | 1/76 = 1.3% [0.2%, 7.1%] | 69/324 = 21.3% [17.2%, 26.1%] |
 | gave_up | 0/76 = 0.0% [0.0%, 4.8%] | 35/324 = 10.8% [7.9%, 14.7%] |
@@ -250,13 +282,13 @@ Share of runs carrying each class, resolved against unresolved (95 % Wilson inte
 | context_blow_up | 3/76 = 3.9% [1.4%, 11.0%] | 114/324 = 35.2% [30.2%, 40.5%] |
 | edited_tests | 2/76 = 2.6% [0.7%, 9.1%] | 6/324 = 1.9% [0.9%, 4.0%] |
 | empty_submission | 0/76 = 0.0% [0.0%, 4.8%] | 14/324 = 4.3% [2.6%, 7.1%] |
-| (no finding) | 46/76 = 60.5% [49.3%, 70.8%] | 82/324 = 25.3% [20.9%, 30.3%] |
+| (no finding) | 47/76 = 61.8% [50.6%, 71.9%] | 91/324 = 28.1% [23.5%, 33.2%] |
 
 ![Share of runs with each failure class, resolved against unresolved](docs/images/classes_by_outcome.png)
 
 On the 300 held-out rows alone (52 resolved, 248 unresolved) the pattern is the same:
-looping 7.7 % against 37.1 %, untested_final_edit 0.0 % against 20.6 %, context_blow_up
-3.8 % against 37.5 %, no finding 61.5 % against 23.4 %.
+looping 1.9 % against 29.8 %, untested_final_edit 0.0 % against 20.6 %, context_blow_up
+3.8 % against 37.5 %, no finding 63.5 % against 25.8 %.
 
 Agreement of two rules with the exit status the framework recorded (the rules never read it):
 
@@ -273,14 +305,14 @@ each class):
 
 | exit status | runs | resolved | looping | untested_final_edit | gave_up | tool_error_cascade | context_blow_up | empty_submission |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| submitted | 258 | 28.7% | 26 | 16 | 0 | 17 | 11 | 5 |
-| submitted (exit_context) | 100 | 2.0% | 77 | 44 | 2 | 34 | 92 | 0 |
-| early_exit | 18 | 0.0% | 7 | 10 | 18 | 5 | 2 | 0 |
-| exit_context | 15 | 0.0% | 10 | 0 | 15 | 7 | 12 | 0 |
+| submitted | 258 | 28.7% | 11 | 16 | 0 | 17 | 11 | 5 |
+| submitted (exit_context) | 100 | 2.0% | 69 | 44 | 2 | 34 | 92 | 0 |
+| early_exit | 18 | 0.0% | 6 | 10 | 18 | 5 | 2 | 0 |
+| exit_context | 15 | 0.0% | 9 | 0 | 15 | 7 | 12 | 0 |
 | submitted_no_patch | 9 | 0.0% | 0 | 0 | 0 | 0 | 0 | 9 |
 
-77 of the 100 runs that were cut off for context length and then auto-submitted contain a
-loop of four or more steps, against 26 of the 258 runs that submitted on their own. That is
+69 of the 100 runs that were cut off for context length and then auto-submitted contain a
+loop of four or more steps, against 11 of the 258 runs that submitted on their own. That is
 consistent with repeated actions filling the context, though counts like these cannot
 separate cause from effect.
 
@@ -289,10 +321,64 @@ What this says and does not say. `looping`, `untested_final_edit`, `context_blow
 27.2 %), so on this data an agent that edits without running anything is no less likely to
 pass, and the class describes process, not outcome. `edited_tests` is rare in both groups.
 These are associations in one dataset produced by one agent scaffold with three Llama-based
-models (360 of the 400 runs come from the 70B one), not causes, and resolved runs are a minority (19 %), so their intervals are wide.
+models (360 of the 400 runs come from the 70B one), not causes, and resolved runs are a
+minority (19 %), so their intervals are wide.
 
-Smaller checks on the other formats, all from the MIT-licensed SWE-agent and mini-swe-agent
-repositories (licences read from the LICENSE files on GitHub):
+### OpenHands: 60 runs from nebius/SWE-rebench-openhands-trajectories
+
+Data: 60 runs from
+[nebius/SWE-rebench-openhands-trajectories](https://huggingface.co/datasets/nebius/SWE-rebench-openhands-trajectories)
+(67,074 OpenHands function-calling runs on SWE-rebench issues, one model; licence CC BY 4.0,
+checked on the dataset page and its LICENSE file), 15 random offsets with seed 0, four rows
+each, tool schemas dropped (15 MB). 29 of the 60 runs are resolved. No threshold was looked
+at on this sample before the run below.
+
+```
+uv run python scripts/fetch_nebius_sample.py --dataset openhands --blocks 15 --out oh-sample
+uv run python scripts/real_data_report.py oh-sample --format toolcalls --tuning 0
+trajlens analyze --format toolcalls oh-sample/row*.json --group-by exit_status
+```
+
+| metric | value |
+| --- | --- |
+| runs | 60 |
+| mean steps | 62.0 |
+| mean edits | 10.4 |
+| mean failed edits | 0.4 |
+| mean test runs | 13.3 |
+| mean error rate | 0.093 |
+| mean first edit step (runs with an edit) | 24.8 |
+| mean first test step (runs with a test) | 7.9 |
+| runs testing after the last edit | 50 |
+| runs submitted | 53 |
+| failed steps by tool class | 354: test 179, search 82, shell 48, edit 24, read 21 |
+| tool mix (share of steps) | edit 16.8%, test 21.4%, read 25.6%, search 14.8%, shell 14.5%, submit 1.4%, other 5.4% |
+
+Shell exit codes here are recorded by OpenHands and editor failures come from its `ERROR`
+replies; nothing is inferred from free text. This agent behaves very differently from the
+SWE-agent runs above: it runs a test at step 7.9 on average and edits only at step 24.8, and
+50 of the 60 runs test after their last edit. Class counts (runs carrying the class, resolved
+of 29 / unresolved of 31): looping 5 / 3, untested_final_edit 4 / 6, edited_tests 2 / 1,
+never_tested, gave_up, tool_error_cascade and empty_submission 0 / 0. On this sample no class
+separates resolved from unresolved runs.
+
+Two rules do not transfer as they stand:
+
+- `context_blow_up` fires on all 60 runs. The median run shows 150,582 characters of
+  observations (25,436 in the SWE-agent sample) and its largest single observation is 30,047
+  characters (4,496), so the 60,000-character default chosen on SWE-agent data means nothing
+  for this scaffold; `--context-chars` has to be set per framework.
+- `gave_up` catches none of the 7 runs that did not end with the finish action (6 stopped at
+  the 100-iteration limit, 1 by the framework's own stuck-in-a-loop detector): the dataset's
+  patch field is never empty in this sample, even for runs that stopped early, and none of
+  those runs ended on a failed step. Hitting an iteration limit is not covered by any class.
+
+The one run OpenHands stopped as stuck in a loop is labelled `looping` by trajlens too.
+
+### Other formats
+
+Smaller checks, all from the MIT-licensed SWE-agent and mini-swe-agent repositories (licences
+read from the LICENSE files on GitHub):
 
 ```
 trajlens analyze swe-agent-trajectories/*.traj
@@ -300,8 +386,8 @@ trajlens analyze swe-agent-trajectories/*.traj
 
 on the 22 `.traj` files under `trajectories/demonstrations/` and `tests/test_data/trajectories/`
 of github.com/SWE-agent/SWE-agent (9 of them capture-the-flag demonstrations, not code
-fixes): 22 runs, mean 10.5 steps, mean error rate 0.057 (inferred), findings looping 4,
-never_tested 9, context_blow_up 1, edited_tests 2, empty_submission 1, no finding 10. The two
+fixes): 22 runs, mean 10.5 steps, mean error rate 0.057 (inferred), findings looping 1,
+never_tested 9, context_blow_up 1, edited_tests 2, empty_submission 1, no finding 11. The two
 mini-swe-agent sample files under `tests/test_data/` of github.com/SWE-agent/mini-swe-agent
 parse to 10 and 2 steps; both are labelled empty_submission because they are plain message
 lists, a form that carries no submission field, so the patch is empty.
@@ -316,14 +402,22 @@ lists, a form that carries no submission field, so the patch is empty.
   prints none of them is a success to trajlens, and a step that prints an old traceback it
   merely displayed (for example `cat`-ing a log) is a failure.
 - Test-file detection is by path only.
+- A non-zero exit code is a failure even when it is the command's normal answer: `grep` with
+  no match exits 1. Of the 82 failed search steps in the OpenHands sample, 72 are `grep`
+  commands that exited 1 with no output (counted with a short script over the step list, not
+  a CLI command).
+- No class for running out of budget (iteration, cost or time limit); such runs are labelled
+  only by what they did before the limit.
 - Near-duplicate detection compares strings, so two commands that do the same thing but look
   different are not matched, and two different edits to neighbouring lines can be.
 - The `context_blow_up` default was chosen on 100 rows of one dataset with one scaffold; other
   frameworks truncate observations or summarise history differently, so `--context-chars`
   should be set per framework. Characters, not tokens, are counted; no tokenizer is used.
-- The OpenHands adapter has only been run on a synthetic event list; no public OpenHands
-  trajectories were analysed here. The mini-swe-agent adapter has only been run on the two
-  sample files in that repository.
+- The `openhands` event-stream adapter has only been run on a synthetic event list; the
+  public OpenHands runs analysed here are function-calling transcripts read by `toolcalls`.
+  The mini-swe-agent adapter has only been run on the two sample files in that repository.
+- The real-data samples are small (400 and 60 runs) and each comes from one dataset
+  publisher; the OpenHands sample has one model.
 - `edited_tests` sees only the final patch, not test files edited and later reverted.
 - No per-step outcome model: a run's resolution is read from the input when present, never
   computed. The rules label behaviour; they do not predict success.

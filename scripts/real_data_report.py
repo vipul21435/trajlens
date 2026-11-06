@@ -76,6 +76,14 @@ def metrics_table(a: dict, runs: list[dict]) -> list[str]:
         ("runs with an empty patch", a["runs_empty_patch"]),
         ("runs with no finding", a["runs_no_finding"]),
     ]
+    failed: dict[str, int] = {}
+    for r in runs:
+        for step in r.get("steps", []):
+            if step["error"]:
+                failed[step["tool"]] = failed.get(step["tool"], 0) + 1
+    if failed:
+        shown = ", ".join(f"{k} {v}" for k, v in sorted(failed.items(), key=lambda kv: -kv[1]))
+        rows.append(("failed steps by tool class", f"{sum(failed.values())}: {shown}"))
     total = sum(a["tool_mix"].values())
     mix = ", ".join(f"{k} {v / total:.1%}" for k, v in a["tool_mix"].items() if v)
     rows.append(("tool mix (share of steps)", mix))
@@ -144,7 +152,7 @@ def main() -> None:
 
     files = sorted(args.data.glob("row*.json"))
     opts = Options()
-    runs = [analyze_run(load(p, args.format), opts, p.name) for p in files]
+    runs = [analyze_run(load(p, args.format), opts, p.name, steps=True) for p in files]
     tuning, held = runs[: args.tuning], runs[args.tuning :]
     manifest = json.loads((args.data / "MANIFEST.json").read_text())
 
@@ -187,6 +195,8 @@ def main() -> None:
         )
         print(f"\nchart: {args.chart}")
     if args.json:
+        for r in runs:
+            r.pop("steps", None)
         rep = {"runs": runs, "aggregate": aggregate(runs)}
         args.json.write_text(json.dumps(rep, indent=1), encoding="utf-8")
 
