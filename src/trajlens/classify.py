@@ -47,6 +47,14 @@ FAILURE_CLASSES = (
 )
 
 
+def _short(text: str, limit: int = 80) -> str:
+    """First line of ``text``, cut to ``limit`` characters."""
+    lines = text.strip().splitlines()
+    first = lines[0] if lines else ""
+    more = len(lines) > 1 or len(first) > limit
+    return first[:limit] + (" ..." if more else "")
+
+
 @dataclass
 class Finding:
     label: str
@@ -75,7 +83,7 @@ def classify_run(
             out.append(
                 Finding(
                     "looping",
-                    f"{lp.kind} repeat of {lp.command!r} across {len(lp.step_ids)} steps",
+                    f"{lp.kind} repeat of {_short(lp.command)!r} across {len(lp.step_ids)} steps",
                     list(lp.step_ids),
                 )
             )

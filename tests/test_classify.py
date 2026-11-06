@@ -90,3 +90,11 @@ def test_gave_up_on_inferred_last_error():
     t = Trajectory("t", steps, patch="diff --git a/x.py b/x.py\n")
     f = {x.label: x for x in classify_run(t, run_metrics(t))}
     assert "observation reads as an error" in f["gave_up"].detail
+
+
+def test_loop_detail_is_short():
+    cmd = "edit 1:3\n" + "x = 1\n" * 50 + "end_of_edit"
+    steps = [Step(index=i, tool="edit", command=cmd) for i in range(4)]
+    t = Trajectory("t", steps)
+    f = [x for x in classify_run(t, run_metrics(t)) if x.label == "looping"][0]
+    assert "'edit 1:3 ...'" in f.detail and len(f.detail) < 120
