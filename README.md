@@ -236,6 +236,23 @@ Agreement of two rules with the exit status the framework recorded (the rules ne
 | context_blow_up vs exit_context | held-out | 86 | 9 | 11 | 194 | 0.91 | 0.89 |
 | gave_up vs not submitted | held-out | 23 | 2 | 0 | 275 | 0.92 | 1.00 |
 
+Grouped by the exit status the framework recorded
+(`trajlens analyze --format chat nebius-sample/row*.json --group-by exit_status`, runs carrying
+each class):
+
+| exit status | runs | resolved | looping | untested_final_edit | gave_up | tool_error_cascade | context_blow_up | empty_submission |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| submitted | 258 | 28.7% | 26 | 16 | 0 | 17 | 11 | 5 |
+| submitted (exit_context) | 100 | 2.0% | 77 | 44 | 2 | 34 | 92 | 0 |
+| early_exit | 18 | 0.0% | 7 | 10 | 18 | 5 | 2 | 0 |
+| exit_context | 15 | 0.0% | 10 | 0 | 15 | 7 | 12 | 0 |
+| submitted_no_patch | 9 | 0.0% | 0 | 0 | 0 | 0 | 0 | 9 |
+
+77 of the 100 runs that were cut off for context length and then auto-submitted contain a
+loop of four or more steps, against 26 of the 258 runs that submitted on their own. That is
+consistent with repeated actions filling the context, though counts like these cannot
+separate cause from effect.
+
 What this says and does not say. `looping`, `untested_final_edit`, `context_blow_up` and
 `gave_up` are far more common in unresolved runs; `never_tested` is not (27.6 % against
 27.2 %), so on this data an agent that edits without running anything is no less likely to

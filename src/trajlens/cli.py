@@ -14,7 +14,7 @@ from pathlib import Path
 from trajlens import __version__
 from trajlens.adapters import FORMATS, load
 from trajlens.adapters.generic import dump_generic
-from trajlens.analysis import Options, aggregate, analyze_paths
+from trajlens.analysis import GROUP_KEYS, Options, aggregate, analyze_paths
 from trajlens.html import render_html
 from trajlens.metrics import INFER_MODES
 
@@ -48,6 +48,15 @@ def format_text(report: dict) -> str:
             found = {k: v for k, v in block["runs_with_finding"].items() if v}
             shown = ", ".join(f"{k}={v}" for k, v in found.items()) or "none"
             lines.append(f"{key} runs: {block['runs']}; with finding: {shown}")
+        for key, block in a.get("groups", {}).items():
+            found = {k: v for k, v in block["runs_with_finding"].items() if v}
+            shown = ", ".join(f"{k}={v}" for k, v in found.items()) or "none"
+            rate = block["resolve_rate"]
+            res = "" if rate is None else f", resolved {rate:.1%}"
+            name = key or "(none)"
+            lines.append(
+                f"{a['group_by']} {name}: {block['runs']} runs{res}; with finding: {shown}"
+            )
     return "\n".join(lines)
 
 
@@ -63,6 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--html", type=Path, help="write a self-contained HTML report here (adds step rows)"
     )
     a.add_argument("--title", default="trajlens report", help="title of the HTML report")
+    a.add_argument("--group-by", choices=GROUP_KEYS, help="also count findings per value of this")
     a.add_argument("--window", type=int, default=6, help="loop window in steps")
     a.add_argument("--min-repeats", type=int, default=3, help="repeats that make a loop")
     a.add_argument("--near-threshold", type=float, default=0.9, help="near-duplicate ratio")
@@ -140,7 +150,9 @@ def main(argv: list[str] | None = None) -> int:
             edit_resets=not args.no_edit_reset,
             include_new_tests=args.include_new_tests,
         )
-        report = analyze_paths(args.paths, args.format, opts, steps=args.html is not None)
+        report = analyze_paths(
+            args.paths, args.format, opts, steps=args.html is not None, group_by=args.group_by
+        )
     except (OSError, ValueError) as exc:
         print(f"trajlens: {exc}", file=sys.stderr)
         return 2

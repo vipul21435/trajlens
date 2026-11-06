@@ -80,3 +80,25 @@ def test_generic_meta_outcome(tmp_path, capsys):
     assert rep["runs"][0]["exit_status"] == "exit_cost"
     assert main(["analyze", str(p)]) == 0
     assert "unresolved runs: 1" in capsys.readouterr().out
+
+
+def test_group_by_model(capsys):
+    edit = Step(index=0, tool="edit", command="edit a.py")
+    a = Trajectory("a", [edit], model="m1", resolved=True)
+    b = Trajectory("b", [edit], model="m1", resolved=False)
+    c = Trajectory("c", [edit], model="m2")
+    rep = analyze_trajectories([a, b, c], group_by="model")
+    g = rep["aggregate"]["groups"]
+    assert list(g) == ["m1", "m2"]
+    assert g["m1"]["runs"] == 2 and g["m1"]["resolve_rate"] == 0.5
+    assert g["m2"]["resolve_rate"] is None
+    assert g["m1"]["share_with_finding"]["never_tested"] == 1.0
+    import pytest
+
+    with pytest.raises(ValueError):
+        analyze_trajectories([a], group_by="colour")
+
+
+def test_group_by_cli(capsys):
+    assert main(["analyze", str(FX / "good.jsonl"), "--group-by", "source_format"]) == 0
+    assert "source_format generic: 1 runs; with finding: none" in capsys.readouterr().out

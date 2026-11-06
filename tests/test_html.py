@@ -67,8 +67,9 @@ def test_embedded_json_round_trips_and_escapes():
 def test_outcome_columns_and_cli(tmp_path):
     ok = Trajectory("ok", [Step(index=0, tool="test", command="pytest")], resolved=True)
     bad = Trajectory("bad", [Step(index=0, tool="edit", command="edit a")], resolved=False)
-    page = render_html(analyze_trajectories([ok, bad]))
+    page = render_html(analyze_trajectories([ok, bad], group_by="task_id"))
     assert "resolved (1)" in page and "unresolved (1)" in page
+    assert "<h2>By task_id</h2>" in page and "(none)" in page
     out = tmp_path / "r.html"
     assert main(["analyze", str(FX / "good.jsonl"), "--html", str(out), "--title", "t"]) == 0
     assert out.read_text().startswith("<!DOCTYPE html>")

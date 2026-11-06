@@ -90,31 +90,43 @@ def analyze_run(
 
 
 def analyze_trajectories(
-    trajs: Iterable[Trajectory], opts: Options | None = None, steps: bool = False
+    trajs: Iterable[Trajectory],
+    opts: Options | None = None,
+    steps: bool = False,
+    group_by: str | None = None,
 ) -> dict:
     """Analyse loaded trajectories and return the full report."""
     runs = [analyze_run(t, opts, steps=steps) for t in trajs]
-    return {"version": __version__, "runs": runs, "aggregate": aggregate(runs)}
+    return {"version": __version__, "runs": runs, "aggregate": aggregate(runs, group_by)}
 
 
 def analyze_paths(
-    paths: list[Path], fmt: str = "auto", opts: Options | None = None, steps: bool = False
+    paths: list[Path],
+    fmt: str = "auto",
+    opts: Options | None = None,
+    steps: bool = False,
+    group_by: str | None = None,
 ) -> dict:
     """Load every file in ``fmt`` (or detect it) and analyse it."""
     runs = [analyze_run(load(p, fmt), opts, str(p), steps) for p in paths]
-    return {"version": __version__, "runs": runs, "aggregate": aggregate(runs)}
+    return {"version": __version__, "runs": runs, "aggregate": aggregate(runs, group_by)}
 
 
 def _mean(values: list[float]) -> float | None:
     return (sum(values) / len(values)) if values else None
 
 
-def aggregate(runs: list[dict]) -> dict:
+GROUP_KEYS = ("model", "source_format", "exit_status", "task_id")
+
+
+def aggregate(runs: list[dict], group_by: str | None = None) -> dict:
     """Totals and means across runs.
 
     When at least one run carries a ``resolved`` outcome, ``by_outcome``
     repeats the finding counts separately for resolved and unresolved runs,
-    with the share of runs that carry each class.
+    with the share of runs that carry each class. With ``group_by`` (one of
+    :data:`GROUP_KEYS`) ``groups`` holds the same block for every value of
+    that run field, largest group first.
     """
     n = len(runs)
     mets = [r["metrics"] for r in runs]
@@ -150,6 +162,15 @@ def aggregate(runs: list[dict]) -> dict:
             key: _outcome_block([r for r in runs if r.get("resolved") is want])
             for key, want in (("resolved", True), ("unresolved", False))
         }
+    if group_by is not None:
+        if group_by not in GROUP_KEYS:
+            raise ValueError(f"group_by must be one of {GROUP_KEYS}, got {group_by!r}")
+        values = Counter(str(r.get(group_by) or "") for r in runs)
+        out["group_by"] = group_by
+        out["groups"] = {
+            v: _outcome_block([r for r in runs if str(r.get(group_by) or "") == v])
+            for v, _ in values.most_common()
+        }
     return out
 
 
@@ -162,9 +183,11 @@ def _outcome_block(runs: list[dict]) -> dict:
     n = len(runs)
     counts = _runs_with(runs)
     mets = [r["metrics"] for r in runs]
+    resolved = [r["resolved"] for r in runs if r.get("resolved") is not None]
     return {
         "runs": n,
         "mean_steps": _mean([m["steps"] for m in mets]),
+        "resolve_rate": (sum(resolved) / len(resolved)) if resolved else None,
         "runs_no_finding": sum(1 for r in runs if not r["findings"]),
         "runs_with_finding": counts,
         "share_with_finding": {k: (v / n if n else None) for k, v in counts.items()},

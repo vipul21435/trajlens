@@ -127,6 +127,26 @@ def _classes(a: dict) -> str:
     return f"<table><thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table>{note}"
 
 
+def _groups(a: dict) -> str:
+    groups = a.get("groups")
+    if not groups:
+        return ""
+    head = "".join(f"<th class=n>{lab}</th>" for lab in FAILURE_CLASSES)
+    rows = []
+    for name, block in groups.items():
+        shares = block["share_with_finding"]
+        cells = "".join(f"<td class=n>{_fmt(shares[lab], 3)}</td>" for lab in FAILURE_CLASSES)
+        rows.append(
+            f"<tr><td>{escape(name or '(none)')}</td><td class=n>{block['runs']}</td>"
+            f"<td class=n>{_fmt(block['resolve_rate'], 3)}</td>{cells}</tr>"
+        )
+    return (
+        f"<h2>By {escape(a['group_by'])}</h2><p class=muted>Share of the group's runs carrying "
+        "each class.</p><table><thead><tr><th>value</th><th class=n>runs</th>"
+        f"<th class=n>resolved</th>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
 def _run_table(runs: list[dict]) -> str:
     rows = []
     for i, r in enumerate(runs):
@@ -217,7 +237,7 @@ def render_html(report: dict, title: str = "trajlens report") -> str:
         f"{a['runs']} runs</p>"
         f"<h2>Summary</h2>{_summary(a)}"
         f"<h2>Tool mix</h2>{_tool_mix(a)}"
-        f"<h2>Failure classes</h2>{_classes(a)}"
+        f"<h2>Failure classes</h2>{_classes(a)}{_groups(a)}"
         f"<h2>Runs</h2>{_run_table(runs)}"
         f"<h2>Run details</h2>{details}"
         f'<script type="application/json" id="report">{data}</script>'
