@@ -572,6 +572,13 @@ empty_submission.
   preference data, for when trajectories become training data.
 - [reporewind](https://github.com/vipul21435/reporewind): resolve Python fix commits into
   source and test patches.
+- [testlogs](https://github.com/vipul21435/testlogs): parse test runner output into per-test
+  results, for reading what the test steps of a run actually reported.
+- [evalstats](https://github.com/vipul21435/evalstats): error bars and paired comparisons for
+  model evaluations, the statistics behind comparing class rates across samples.
+- [awesome-coding-agent-evals](https://github.com/vipul21435/awesome-coding-agent-evals): a
+  curated list of benchmarks, harnesses and datasets for coding agents, including published
+  trajectory sets.
 
 ## Licence
 
