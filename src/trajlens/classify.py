@@ -11,7 +11,8 @@ looping             a loop of at least ``loop_min_steps`` [4] steps, exact or
 never_tested        the run has at least one edit and no test run at all;
                     evidence: the edit step ids
 untested_final_edit the run has test runs but none after the last edit;
-                    evidence: the last edit step and the last test step
+                    evidence: the last test step and the last edit step,
+                    in step order
 gave_up             no submit step and the final patch is empty, or the last
                     step is an error (exit code, or observation text when the
                     format has no exit codes); evidence: the last step. A run
@@ -126,7 +127,7 @@ def classify_run(
             Finding(
                 "untested_final_edit",
                 f"last edit at step {m.last_edit_step}, last test run at step {m.last_test_step}",
-                [i for i in ids if i is not None],
+                sorted(i for i in ids if i is not None),
             )
         )
 

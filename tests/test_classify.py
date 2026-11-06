@@ -73,7 +73,7 @@ def test_untested_final_edit(tmp_path):
     t = load(p)
     f = {x.label: x for x in classify_run(t, run_metrics(t))}
     assert set(f) == {"untested_final_edit"}
-    assert f["untested_final_edit"].step_ids == [1, 0]
+    assert f["untested_final_edit"].step_ids == [0, 1]  # step order, like the other classes
 
 
 def test_gave_up_on_last_error(tmp_path):
