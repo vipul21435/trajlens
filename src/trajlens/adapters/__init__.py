@@ -10,6 +10,9 @@ guessed from the file name and, for ``.json``, from the document shape:
   with ``messages`` is mini-swe-agent; a list of events with ``action`` or
   ``observation`` keys, or an object with ``events``/``history`` holding such
   events, is OpenHands; an object with ``trajectory`` is SWE-agent.
+
+The ``chat`` format (a model transcript with fenced commands) is never
+guessed, because its shape overlaps the others; pass ``--format chat``.
 """
 
 from __future__ import annotations
@@ -17,19 +20,21 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from trajlens.adapters.chat import load_chat, parse_chat
 from trajlens.adapters.generic import load_generic
 from trajlens.adapters.minisweagent import load_minisweagent, parse_minisweagent
 from trajlens.adapters.openhands import load_openhands, parse_openhands
 from trajlens.adapters.sweagent import load_sweagent, parse_sweagent
 from trajlens.model import Trajectory
 
-FORMATS = ("generic", "sweagent", "minisweagent", "openhands")
+FORMATS = ("generic", "sweagent", "minisweagent", "openhands", "chat")
 
 _LOADERS = {
     "generic": load_generic,
     "sweagent": load_sweagent,
     "minisweagent": load_minisweagent,
     "openhands": load_openhands,
+    "chat": load_chat,
 }
 
 
@@ -93,6 +98,8 @@ def load(path: str | Path, fmt: str = "auto") -> Trajectory:
 __all__ = [
     "FORMATS",
     "detect_format",
+    "load_chat",
+    "parse_chat",
     "detect_json",
     "load",
     "load_generic",
