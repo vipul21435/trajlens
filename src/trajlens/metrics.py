@@ -151,9 +151,7 @@ def find_loops(
     for i, c in enumerate(commands):
         if not c or i in skip:
             continue
-        ids = _collect(
-            commands, i, window, skip, lambda a, b: near_duplicate(a, b, near_threshold)
-        )
+        ids = _collect(commands, i, window, skip, lambda a, b: near_duplicate(a, b, near_threshold))
         if len(ids) >= min_repeats:
             near.append(Loop("near", steps[i].command.strip(), ids))
             near_steps.update(ids)

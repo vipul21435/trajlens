@@ -125,9 +125,7 @@ def classify_run(
         out.append(Finding("context_blow_up", ", ".join(parts), ids))
 
     if m.patch_touches_tests:
-        out.append(
-            Finding("edited_tests", "patch touches " + ", ".join(m.patch_test_files), [])
-        )
+        out.append(Finding("edited_tests", "patch touches " + ", ".join(m.patch_test_files), []))
 
     if m.submitted and m.patch_empty:
         submit_ids = [s.index for s in steps if s.tool == SUBMIT]

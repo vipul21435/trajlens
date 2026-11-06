@@ -1,6 +1,6 @@
 """Command line entry point.
 
-    trajlens analyze RUN.jsonl [RUN2.jsonl ...] [--json OUT] [--format generic]
+trajlens analyze RUN.jsonl [RUN2.jsonl ...] [--json OUT] [--format generic]
 """
 
 from __future__ import annotations
@@ -83,11 +83,13 @@ def format_text(report: dict) -> str:
     lines = []
     for r in report["runs"]:
         m = r["metrics"]
-        lines.append(f"{m['run_id']}: {m['steps']} steps, {m['edits']} edits, "
-                     f"{m['test_runs']} test runs, error rate {m['error_rate']:.2f}, "
-                     f"first edit {m['first_edit_step']}, first test {m['first_test_step']}, "
-                     f"tests after last edit {m['tests_after_last_edit']}, "
-                     f"patch files {len(m['patch_files'])}")
+        lines.append(
+            f"{m['run_id']}: {m['steps']} steps, {m['edits']} edits, "
+            f"{m['test_runs']} test runs, error rate {m['error_rate']:.2f}, "
+            f"first edit {m['first_edit_step']}, first test {m['first_test_step']}, "
+            f"tests after last edit {m['tests_after_last_edit']}, "
+            f"patch files {len(m['patch_files'])}"
+        )
         for f in r["findings"]:
             ids = ",".join(str(i) for i in f["step_ids"]) or "-"
             lines.append(f"  {f['label']}: {f['detail']} [steps {ids}]")
