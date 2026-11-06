@@ -15,13 +15,17 @@ demonstration trajectories published in the SWE-agent repository:
   no ``trajectory`` key: every ``message_type == "action"`` message becomes a
   step and the next ``observation`` message its observation.
 
-SWE-agent does not record exit codes per step, so ``exit_code`` is ``None``
-and the error metrics stay at zero for this format. Timestamps are the
+SWE-agent does not record exit codes per step, so ``exit_code`` is ``None``;
+under ``--infer-errors auto`` (the default) failed steps are inferred from
+the observation text instead (see :func:`trajlens.metrics.step_errors`).
+Timestamps are the
 cumulative sum of ``execution_time`` when present, so durations are the
 environment's time, not wall clock.
 
 The first word of ``action`` is the tool name (``open``, ``edit``, ``create``,
 ``find_file``, ``submit``, ``python`` ...); the whole string is the command.
+For the file editor of SWE-agent 1.x (``str_replace_editor view|create|...``)
+the sub-command decides: ``view`` is a read, the others are edits.
 """
 
 from __future__ import annotations
