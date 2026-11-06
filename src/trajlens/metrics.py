@@ -1,0 +1,261 @@
+"""Per-run behaviour metrics.
+
+Every number here is computed from the step list alone. The window and
+similarity thresholds are parameters with plain defaults so the caller can
+tune them from the command line.
+"""
+
+from __future__ import annotations
+
+import re
+from collections import Counter
+from dataclasses import asdict, dataclass, field
+from difflib import SequenceMatcher
+
+from trajlens.model import EDIT, TEST, TOOL_CLASSES, Step, Trajectory
+
+_WS = re.compile(r"\s+")
+
+# Paths that count as test files in the final patch.
+_TEST_PATH_RE = re.compile(
+    r"(^|/)(tests?|testing|spec|specs|__tests__)(/|$)|(^|/)(test_[^/]*|[^/]*_test\.[^/]+|"
+    r"[^/]*\.test\.[^/]+|[^/]*\.spec\.[^/]+|conftest\.py)$"
+)
+_DIFF_PATH_RE = re.compile(r"^diff --git a/(\S+) b/(\S+)$", re.MULTILINE)
+_PLUS_PATH_RE = re.compile(r"^\+\+\+ (?:b/)?(\S+)$", re.MULTILINE)
+
+
+def normalise_command(command: str) -> str:
+    """Collapse whitespace and lower-case a command for duplicate detection."""
+    return _WS.sub(" ", command.strip()).lower()
+
+
+def near_duplicate(a: str, b: str, threshold: float) -> bool:
+    """True when two normalised commands are at least ``threshold`` similar.
+
+    Similarity is difflib's ratio, 2*M/T where M is the number of matched
+    characters and T the total length of both strings.
+    """
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    return SequenceMatcher(None, a, b).ratio() >= threshold
+
+
+@dataclass
+class Loop:
+    """A run of repeated commands inside one window."""
+
+    kind: str  # "exact" or "near"
+    command: str
+    step_ids: list[int]
+
+
+@dataclass
+class RunMetrics:
+    run_id: str
+    steps: int
+    tool_mix: dict[str, int]
+    edits: int
+    test_runs: int
+    edits_per_test_run: float | None
+    first_edit_step: int | None
+    first_test_step: int | None
+    exact_loops: list[Loop]
+    near_loops: list[Loop]
+    looped_steps: int
+    error_steps: int
+    error_rate: float
+    max_error_streak: int
+    error_streak_steps: list[int]
+    observation_chars: int
+    observation_growth: float | None
+    largest_observation_step: int | None
+    largest_observation_chars: int
+    tests_after_last_edit: bool | None
+    last_edit_step: int | None
+    last_test_step: int | None
+    patch_files: list[str]
+    patch_test_files: list[str]
+    patch_touches_tests: bool
+    patch_empty: bool
+    submitted: bool
+    duration_seconds: float | None
+    tokens_in: int | None
+    tokens_out: int | None
+    extra: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+def patch_paths(patch: str) -> list[str]:
+    """File paths touched by a unified diff, in order, without duplicates."""
+    seen: list[str] = []
+    for m in _DIFF_PATH_RE.finditer(patch):
+        p = m.group(2)
+        if p not in seen:
+            seen.append(p)
+    if not seen:
+        for m in _PLUS_PATH_RE.finditer(patch):
+            p = m.group(1)
+            if p != "/dev/null" and p not in seen:
+                seen.append(p)
+    return seen
+
+
+def is_test_path(path: str) -> bool:
+    return bool(_TEST_PATH_RE.search(path))
+
+
+def _collect(commands: list[str], start: int, window: int, skip: set[int], same) -> list[int]:
+    """Greedily gather step ids whose command matches, each within ``window``
+    steps of the previous match."""
+    ids = [start]
+    j = start + 1
+    while j < len(commands) and j - ids[-1] < window:
+        if j not in skip and commands[j] and same(commands[start], commands[j]):
+            ids.append(j)
+        j += 1
+    return ids
+
+
+def find_loops(
+    steps: list[Step], window: int = 6, min_repeats: int = 3, near_threshold: float = 0.9
+) -> tuple[list[Loop], list[Loop]]:
+    """Find exact and near-duplicate command loops.
+
+    Starting from each step, gather later steps whose normalised command
+    matches, as long as each match is within ``window`` steps of the previous
+    one. A group of at least ``min_repeats`` steps is a loop. Exact loops
+    compare normalised strings for equality; near loops use difflib ratio at
+    or above ``near_threshold`` against the first command of the group, and
+    exclude steps already in an exact loop. Each step is reported in at most
+    one loop of each kind.
+    """
+    commands = [normalise_command(s.command) if s.command else "" for s in steps]
+    exact: list[Loop] = []
+    exact_steps: set[int] = set()
+    for i, c in enumerate(commands):
+        if not c or i in exact_steps:
+            continue
+        ids = _collect(commands, i, window, exact_steps, lambda a, b: a == b)
+        if len(ids) >= min_repeats:
+            exact.append(Loop("exact", steps[i].command.strip(), ids))
+            exact_steps.update(ids)
+
+    near: list[Loop] = []
+    near_steps: set[int] = set()
+    skip = exact_steps | near_steps
+    for i, c in enumerate(commands):
+        if not c or i in skip:
+            continue
+        ids = _collect(
+            commands, i, window, skip, lambda a, b: near_duplicate(a, b, near_threshold)
+        )
+        if len(ids) >= min_repeats:
+            near.append(Loop("near", steps[i].command.strip(), ids))
+            near_steps.update(ids)
+            skip = exact_steps | near_steps
+    return exact, near
+
+
+def error_streaks(steps: list[Step]) -> list[list[int]]:
+    """Maximal runs of consecutive error steps, as lists of step ids."""
+    streaks: list[list[int]] = []
+    cur: list[int] = []
+    for s in steps:
+        if s.is_error:
+            cur.append(s.index)
+        elif cur:
+            streaks.append(cur)
+            cur = []
+    if cur:
+        streaks.append(cur)
+    return streaks
+
+
+def observation_growth(steps: list[Step]) -> float | None:
+    """Ratio of mean observation length in the last third to the first third.
+
+    None when there are fewer than three steps.
+    """
+    if len(steps) < 3:
+        return None
+    third = len(steps) // 3
+    head = [len(s.observation) for s in steps[:third]]
+    tail = [len(s.observation) for s in steps[-third:]]
+    head_mean = sum(head) / len(head)
+    tail_mean = sum(tail) / len(tail)
+    if head_mean == 0:
+        return None if tail_mean == 0 else float("inf")
+    return tail_mean / head_mean
+
+
+def run_metrics(
+    traj: Trajectory,
+    window: int = 6,
+    min_repeats: int = 3,
+    near_threshold: float = 0.9,
+) -> RunMetrics:
+    """Compute every per-run metric for one trajectory."""
+    steps = traj.steps
+    n = len(steps)
+    mix = Counter(s.tool for s in steps)
+    tool_mix = {t: mix.get(t, 0) for t in TOOL_CLASSES}
+    edit_ids = [s.index for s in steps if s.tool == EDIT]
+    test_ids = [s.index for s in steps if s.tool == TEST]
+    edits = len(edit_ids)
+    test_runs = len(test_ids)
+    exact, near = find_loops(steps, window, min_repeats, near_threshold)
+    looped = {i for lp in exact + near for i in lp.step_ids}
+    errors = [s.index for s in steps if s.is_error]
+    streaks = error_streaks(steps)
+    longest = max(streaks, key=len) if streaks else []
+    obs_lengths = [len(s.observation) for s in steps]
+    largest_idx = max(range(n), key=lambda i: obs_lengths[i]) if n else None
+    last_edit = edit_ids[-1] if edit_ids else None
+    last_test = test_ids[-1] if test_ids else None
+    if last_edit is None:
+        tests_after = None
+    else:
+        tests_after = last_test is not None and last_test > last_edit
+    files = patch_paths(traj.patch)
+    test_files = [p for p in files if is_test_path(p)]
+    stamps = [s.timestamp for s in steps if s.timestamp is not None]
+    duration = (max(stamps) - min(stamps)) if len(stamps) >= 2 else None
+    tin = [s.tokens_in for s in steps if s.tokens_in is not None]
+    tout = [s.tokens_out for s in steps if s.tokens_out is not None]
+    return RunMetrics(
+        run_id=traj.run_id,
+        steps=n,
+        tool_mix=tool_mix,
+        edits=edits,
+        test_runs=test_runs,
+        edits_per_test_run=(edits / test_runs) if test_runs else None,
+        first_edit_step=edit_ids[0] if edit_ids else None,
+        first_test_step=test_ids[0] if test_ids else None,
+        exact_loops=exact,
+        near_loops=near,
+        looped_steps=len(looped),
+        error_steps=len(errors),
+        error_rate=(len(errors) / n) if n else 0.0,
+        max_error_streak=len(longest),
+        error_streak_steps=list(longest),
+        observation_chars=sum(obs_lengths),
+        observation_growth=observation_growth(steps),
+        largest_observation_step=largest_idx,
+        largest_observation_chars=obs_lengths[largest_idx] if largest_idx is not None else 0,
+        tests_after_last_edit=tests_after,
+        last_edit_step=last_edit,
+        last_test_step=last_test,
+        patch_files=files,
+        patch_test_files=test_files,
+        patch_touches_tests=bool(test_files),
+        patch_empty=not traj.patch.strip(),
+        submitted=any(s.tool == "submit" for s in steps),
+        duration_seconds=duration,
+        tokens_in=sum(tin) if tin else None,
+        tokens_out=sum(tout) if tout else None,
+    )

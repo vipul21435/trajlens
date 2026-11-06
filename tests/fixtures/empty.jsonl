@@ -1,0 +1,4 @@
+{"type": "meta", "run_id": "empty", "task_id": "calc-4", "model": "demo"}
+{"thought": "step 0", "action": "bash", "command": "ls", "observation": "ok", "exit_code": 0, "timestamp": 1000.0, "tokens_in": 500, "tokens_out": 60}
+{"thought": "step 1", "action": "submit", "command": "", "observation": "ok", "exit_code": 0, "timestamp": 1003.0, "tokens_in": 540, "tokens_out": 60}
+{"type": "patch", "patch": ""}
