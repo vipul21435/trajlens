@@ -18,7 +18,9 @@ Recognised keys (all optional except ``action`` or ``command``):
 A line with ``"type": "meta"`` carries run level fields: ``run_id``,
 ``task_id``, ``model``, ``patch`` (the final diff as a string),
 ``exit_status`` (the agent framework's own end state, a string) and
-``resolved`` (true or false: whether the task's tests passed on the patch). A line with
+``resolved`` (true/false or 1/0: whether the task's tests passed on the patch). A
+missing or null field keeps its default (the file name for ``run_id``,
+empty otherwise). A line with
 ``"type": "patch"`` and a ``patch`` key is also accepted.
 
 The ``action`` string is classified into a tool class by :func:`classify_tool`.
@@ -248,6 +250,10 @@ def step_from_record(index: int, rec: dict) -> Step:
     )
 
 
+def _text(value: object, default: str) -> str:
+    return default if value is None else str(value)
+
+
 def load_generic(path: str | Path) -> Trajectory:
     """Read one generic JSONL trajectory file."""
     path = Path(path)
@@ -266,15 +272,16 @@ def load_generic(path: str | Path) -> Trajectory:
                 raise ValueError(f"{path}:{line_no}: expected an object")
             kind = rec.get("type", "step")
             if kind == "meta":
-                traj.run_id = str(rec.get("run_id", traj.run_id))
-                traj.task_id = str(rec.get("task_id", ""))
-                traj.model = str(rec.get("model", ""))
+                traj.run_id = _text(rec.get("run_id"), traj.run_id)
+                traj.task_id = _text(rec.get("task_id"), "")
+                traj.model = _text(rec.get("model"), "")
                 if "patch" in rec:
                     traj.patch = str(rec["patch"] or "")
                 if rec.get("exit_status") is not None:
                     traj.extra["exit_status"] = str(rec["exit_status"])
-                if isinstance(rec.get("resolved"), bool):
-                    traj.resolved = rec["resolved"]
+                resolved = rec.get("resolved")
+                if isinstance(resolved, bool) or (isinstance(resolved, int) and resolved in (0, 1)):
+                    traj.resolved = bool(resolved)
                 continue
             if kind == "patch":
                 traj.patch = str(rec.get("patch", "") or "")

@@ -151,7 +151,7 @@ stays `None`.
 Generic JSONL: one step per line with any of `thought`, `action`, `command`, `observation`,
 `exit_code`, `timestamp` (epoch seconds), `tokens_in`, `tokens_out`, and optionally `tool`
 (one of the classes below). A line with `"type": "meta"` carries `run_id`, `task_id`,
-`model`, `patch`, `exit_status` and `resolved` (true or false); a line with
+`model`, `patch`, `exit_status` and `resolved` (true/false or 1/0; a null field keeps its default); a line with
 `"type": "patch"` carries the final diff.
 
 The `openhands` adapter reads the event-stream serialisation (`event_to_dict` in the OpenHands
