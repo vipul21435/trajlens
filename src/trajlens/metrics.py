@@ -352,6 +352,7 @@ def find_loops(
     edit_resets: bool = True,
     same_observation: bool = True,
     observation_head: int = 300,
+    keep_steps: int | None = None,
 ) -> tuple[list[Loop], list[Loop]]:
     """Find exact and near-duplicate command loops.
 
@@ -360,8 +361,14 @@ def find_loops(
     one. A group of at least ``min_repeats`` steps is a loop. Exact loops
     compare normalised strings for equality; near loops use difflib ratio at
     or above ``near_threshold`` against the first command of the group, and
-    exclude steps already in an exact loop. Each step is reported in at most
-    one loop of each kind.
+    exclude steps already in an exact loop of at least ``keep_steps`` steps
+    (every exact loop when ``keep_steps`` is None). With ``keep_steps`` set to
+    the looping class's minimum, an exact loop too short to count on its own
+    can still be part of a near loop: three identical commands followed by
+    two slight variants are one near loop of five. A near group that only
+    restates one exact loop is dropped, and an exact loop taken in whole by a
+    near loop is reported as part of the near loop only. Each step is
+    reported in at most one loop of each kind.
 
     With ``edit_resets`` (the default) an edit step between two repeats of a
     command that is not an edit ends the group: rerunning the same test after
@@ -408,24 +415,24 @@ def find_loops(
     def near(a: int, b: int) -> bool:
         return near_duplicate(commands[a], commands[b], near_threshold) and same_obs(a, b)
 
+    # Exact loops shorter than ``keep_steps`` leave their steps to the near pass.
+    held = {i for lp in exact if keep_steps is None or len(lp.step_ids) >= keep_steps
+            for i in lp.step_ids}  # fmt: skip
     near_loops: list[Loop] = []
     near_steps: set[int] = set()
-    skip = exact_steps | near_steps
+    skip = held | near_steps
     for i, c in enumerate(commands):
         if not c or i in skip:
             continue
-        ids = _collect(
-            commands,
-            i,
-            window,
-            skip,
-            near,
-            barriers_for(i),
-        )
-        if len(ids) >= min_repeats:
-            near_loops.append(Loop("near", steps[i].command.strip(), ids))
-            near_steps.update(ids)
-            skip = exact_steps | near_steps
+        ids = _collect(commands, i, window, skip, near, barriers_for(i))
+        group = set(ids)
+        if len(ids) < min_repeats or any(group <= set(lp.step_ids) for lp in exact):
+            continue
+        near_loops.append(Loop("near", steps[i].command.strip(), ids))
+        near_steps.update(ids)
+        skip = held | near_steps
+    # A short exact loop taken in whole by a near loop is reported as part of it.
+    exact = [lp for lp in exact if not any(set(lp.step_ids) <= set(n.step_ids) for n in near_loops)]
     return exact, near_loops
 
 
@@ -477,10 +484,12 @@ def run_metrics(
     infer_errors: str = "auto",
     edit_resets: bool = True,
     same_observation: bool = True,
+    loop_min_steps: int | None = None,
 ) -> RunMetrics:
     """Compute every per-run metric for one trajectory.
 
-    ``infer_errors`` is passed to :func:`step_errors`.
+    ``infer_errors`` is passed to :func:`step_errors`; ``loop_min_steps`` to
+    :func:`find_loops` as ``keep_steps``.
     """
     steps = traj.steps
     n = len(steps)
@@ -491,7 +500,13 @@ def run_metrics(
     edits = len(edit_ids)
     test_runs = len(test_ids)
     exact, near = find_loops(
-        steps, window, min_repeats, near_threshold, edit_resets, same_observation
+        steps,
+        window,
+        min_repeats,
+        near_threshold,
+        edit_resets,
+        same_observation,
+        keep_steps=loop_min_steps,
     )
     looped = {i for lp in exact + near for i in lp.step_ids}
     failed = step_errors(steps, infer_errors)

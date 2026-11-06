@@ -79,6 +79,7 @@ def analyze_run(
         infer_errors=o.infer_errors,
         edit_resets=o.edit_resets,
         same_observation=o.same_observation,
+        loop_min_steps=o.loop_min_steps,
     )
     findings = classify_run(
         traj,

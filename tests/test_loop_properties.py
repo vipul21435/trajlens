@@ -26,11 +26,12 @@ def build(rows):
     st.integers(2, 5),
     st.booleans(),
     st.booleans(),
+    st.one_of(st.none(), st.integers(2, 6)),
 )
-def test_loop_invariants(rows, window, min_repeats, resets, same_obs):
+def test_loop_invariants(rows, window, min_repeats, resets, same_obs, keep):
     steps = build(rows)
     exact, near = find_loops(
-        steps, window, min_repeats, edit_resets=resets, same_observation=same_obs
+        steps, window, min_repeats, edit_resets=resets, same_observation=same_obs, keep_steps=keep
     )
     for loops in (exact, near):
         seen: set[int] = set()
@@ -41,8 +42,10 @@ def test_loop_invariants(rows, window, min_repeats, resets, same_obs):
             assert all(b - a <= window for a, b in zip(ids, ids[1:], strict=False))
             assert not seen & set(ids)
             seen |= set(ids)
-    in_exact = {i for lp in exact for i in lp.step_ids}
-    assert not in_exact & {i for lp in near for i in lp.step_ids}
+    held = {i for lp in exact if keep is None or len(lp.step_ids) >= keep for i in lp.step_ids}
+    assert not held & {i for lp in near for i in lp.step_ids}
+    for e in exact:
+        assert not any(set(e.step_ids) <= set(n.step_ids) for n in near)
 
 
 @settings(max_examples=300, deadline=None)

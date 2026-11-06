@@ -9,7 +9,7 @@ blow-up, edited tests, empty submission) with small documented rules that each c
 ids they rest on. Output: text, JSON, CSV and one self-contained HTML page.
 
 On 400 public SWE-agent runs (nebius/SWE-agent-trajectories, CC BY 4.0), a loop of four or more
-repeated steps appears in 29.0 % of unresolved runs against 1.3 % of resolved runs, and an
+repeated steps appears in 29.6 % of unresolved runs against 1.3 % of resolved runs, and an
 untested final edit in 21.6 % against 1.3 %; commands and full tables under
 [Results](#results-on-real-public-data).
 
@@ -223,7 +223,10 @@ steps whose command matches are gathered while each match is within `--window` [
 the previous one; a group of at least `--min-repeats` [3] is a loop. Exact loops compare the
 normalised strings; near loops compare with difflib's ratio, 2M/T where M is the number of
 matched characters and T the total length of both strings, at or above `--near-threshold`
-[0.9] against the group's first command, and skip steps already in an exact loop. An edit
+[0.9] against the group's first command, and skip steps already in an exact loop of at least
+`--loop-min-steps` [4] steps. A shorter exact loop does not count as `looping` on its own, so
+its steps stay free: three identical failing commands followed by two slight variants are one
+near loop of five, and the exact loop it takes in whole is reported as part of it. An edit
 between two repeats of a non-edit command ends the group: rerunning the same test after
 changing the code is the edit-test cycle, not a loop. Repeated edits are still grouped,
 because an edit that keeps failing to apply is exactly the loop to catch.
@@ -244,13 +247,13 @@ rows are therefore not untouched. The effect on the `looping` class over all 400
 
 | flags | resolved runs with looping (of 76) | unresolved runs with looping (of 324) |
 | --- | --- | --- |
-| `--no-edit-reset --loop-any-observation` | 16 | 149 |
-| `--loop-any-observation` | 4 | 116 |
-| `--no-edit-reset` | 4 | 108 |
-| defaults | 1 | 94 |
+| `--no-edit-reset --loop-any-observation` | 16 | 150 |
+| `--loop-any-observation` | 4 | 118 |
+| `--no-edit-reset` | 4 | 110 |
+| defaults | 1 | 96 |
 
 A hand check of the defaults: 20 `looping` findings drawn at random from the 75 held-out runs
-that carry one were read step by step
+that carried one before short exact loops could join near loops were read step by step
 (`trajlens audit $(ls nebius-sample/row*.json | tail -n 300) --format chat --label looping --n 20 --seed 2026`). 19 were repeats
 that brought nothing new: the same edit rejected for the same syntax error up to 24 times,
 `find. -name ...` (a typo answered by `command not found`) 262 times, the same file opened or
@@ -258,6 +261,10 @@ the same `find_file` issued again and again. The twentieth was a `grep` for one 
 four different directories, each returning nothing; it is a systematic search rather than a
 stuck agent, so the near-duplicate rule still over-reaches when commands share a long path.
 One reader, no second rater: treat this as a sanity check, not a measured precision.
+That rule change added two held-out runs (77 now carry the class, so the audit command draws a
+different 20), and both were read: one repeats a rejected edit of the same lines
+(`edit 249:249`, then `edit 249:253` three times with the same error), the other rewrites
+lines 1 to 9 four times in a row with near-identical output.
 
 ### Failure classes
 
@@ -365,7 +372,7 @@ Share of runs carrying each class, resolved against unresolved (95 % Wilson inte
 
 | class | resolved runs (n=76) | unresolved runs (n=324) |
 | --- | --- | --- |
-| looping | 1/76 = 1.3% [0.2%, 7.1%] | 94/324 = 29.0% [24.3%, 34.2%] |
+| looping | 1/76 = 1.3% [0.2%, 7.1%] | 96/324 = 29.6% [24.9%, 34.8%] |
 | never_tested | 19/76 = 25.0% [16.6%, 35.8%] | 81/324 = 25.0% [20.6%, 30.0%] |
 | untested_final_edit | 1/76 = 1.3% [0.2%, 7.1%] | 70/324 = 21.6% [17.5%, 26.4%] |
 | gave_up | 0/76 = 0.0% [0.0%, 4.8%] | 35/324 = 10.8% [7.9%, 14.7%] |
@@ -378,7 +385,7 @@ Share of runs carrying each class, resolved against unresolved (95 % Wilson inte
 ![Share of runs with each failure class, resolved against unresolved](docs/images/classes_by_outcome.png)
 
 On the 300 held-out rows alone (52 resolved, 248 unresolved) the pattern is the same:
-looping 1.9 % against 29.8 %, untested_final_edit 0.0 % against 21.0 %, context_blow_up
+looping 1.9 % against 30.6 %, untested_final_edit 0.0 % against 21.0 %, context_blow_up
 3.8 % against 37.5 %, no finding 65.4 % against 27.0 %.
 
 Agreement of two rules with the exit status the framework recorded (the rules never read it):
@@ -396,14 +403,14 @@ each class):
 
 | exit status | runs | resolved | looping | untested_final_edit | gave_up | tool_error_cascade | context_blow_up | empty_submission |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| submitted | 258 | 28.7% | 11 | 16 | 0 | 17 | 11 | 5 |
-| submitted (exit_context) | 100 | 2.0% | 69 | 45 | 2 | 34 | 92 | 0 |
+| submitted | 258 | 28.7% | 12 | 16 | 0 | 17 | 11 | 5 |
+| submitted (exit_context) | 100 | 2.0% | 70 | 45 | 2 | 34 | 92 | 0 |
 | early_exit | 18 | 0.0% | 6 | 10 | 18 | 5 | 2 | 0 |
 | exit_context | 15 | 0.0% | 9 | 0 | 15 | 7 | 12 | 0 |
 | submitted_no_patch | 9 | 0.0% | 0 | 0 | 0 | 0 | 0 | 9 |
 
-69 of the 100 runs that were cut off for context length and then auto-submitted contain a
-loop of four or more steps, against 11 of the 258 runs that submitted on their own. That is
+70 of the 100 runs that were cut off for context length and then auto-submitted contain a
+loop of four or more steps, against 12 of the 258 runs that submitted on their own. That is
 consistent with repeated actions filling the context, though counts like these cannot
 separate cause from effect.
 
@@ -478,7 +485,7 @@ $ trajlens analyze --format chat nebius-sample/row*.json --json swe.json
 $ trajlens analyze --format toolcalls oh-sample/row*.json --json oh.json
 $ trajlens compare swe.json oh.json --names swe-agent openhands
 class                       swe-agent        openhands   openhands - swe-agent [95% interval]
-looping                 95/400  23.8%      8/60  13.3%    -10.4% [ -18.2%,   +1.1%]
+looping                 97/400  24.2%      8/60  13.3%    -10.9% [ -18.7%,   +0.6%]
 never_tested           100/400  25.0%      0/60   0.0%    -25.0% [ -29.5%,  -17.8%] *
 untested_final_edit     71/400  17.8%      4/60   6.7%    -11.1% [ -16.8%,   -1.2%] *
 gave_up                 35/400   8.8%      0/60   0.0%     -8.8% [ -11.9%,   -2.3%] *
