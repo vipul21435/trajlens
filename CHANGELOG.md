@@ -35,3 +35,9 @@
   notices are failed steps; analyze thresholds and `--fail-on` are checked up front; null
   generic meta fields keep their defaults; `load`, `analyze_trajectories` and `Options` are
   exported from the package.
+- Third review round: `str_replace_editor view` is a read and only its other sub-commands
+  are edits, in every adapter; `str_replace_editor create` counts as a created script;
+  OpenHands exit codes are also read from `extras.metadata.exit_code`; an exact loop shorter
+  than `--loop-min-steps` can be part of a near loop; mini-swe-agent message lists take their
+  patch from the submit command's output; `untested_final_edit` evidence is in step order;
+  generic JSONL accepts ISO 8601 timestamps.
