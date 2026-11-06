@@ -71,6 +71,11 @@ def build_parser() -> argparse.ArgumentParser:
     a.add_argument("--blowup-chars", type=int, default=20000, help="observation size for blow-up")
     a.add_argument("--growth-ratio", type=float, default=5.0, help="observation growth for blow-up")
     a.add_argument(
+        "--no-edit-reset",
+        action="store_true",
+        help="let repeats of a command span edits (count edit-test cycles as loops)",
+    )
+    a.add_argument(
         "--infer-errors",
         default="auto",
         choices=INFER_MODES,
@@ -125,6 +130,7 @@ def main(argv: list[str] | None = None) -> int:
             blowup_chars=args.blowup_chars,
             growth_ratio=args.growth_ratio,
             infer_errors=args.infer_errors,
+            edit_resets=not args.no_edit_reset,
         )
         report = analyze_paths(args.paths, args.format, opts, steps=args.html is not None)
     except (OSError, ValueError) as exc:

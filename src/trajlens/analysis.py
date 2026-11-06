@@ -31,6 +31,7 @@ class Options:
     blowup_chars: int = 20000
     growth_ratio: float = 5.0
     infer_errors: str = "auto"
+    edit_resets: bool = True
 
 
 def step_rows(traj: Trajectory, infer_errors: str = "auto", head: int = 160) -> list[dict]:
@@ -62,7 +63,7 @@ def analyze_run(
     With ``steps`` the dict also holds :func:`step_rows` under ``steps``.
     """
     o = opts or Options()
-    m = run_metrics(traj, o.window, o.min_repeats, o.near_threshold, o.infer_errors)
+    m = run_metrics(traj, o.window, o.min_repeats, o.near_threshold, o.infer_errors, o.edit_resets)
     findings = classify_run(
         traj, m, o.loop_min_steps, o.cascade_min, o.blowup_chars, o.growth_ratio
     )

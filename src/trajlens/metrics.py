@@ -159,20 +159,34 @@ def is_test_path(path: str) -> bool:
     return bool(_TEST_PATH_RE.search(path))
 
 
-def _collect(commands: list[str], start: int, window: int, skip: set[int], same) -> list[int]:
+def _collect(
+    commands: list[str],
+    start: int,
+    window: int,
+    skip: set[int],
+    same,
+    barriers: list[bool] | None = None,
+) -> list[int]:
     """Greedily gather step ids whose command matches, each within ``window``
-    steps of the previous match."""
+    steps of the previous match. A barrier step between two matches (an edit,
+    when the repeated command is not itself an edit) ends the group."""
     ids = [start]
     j = start + 1
     while j < len(commands) and j - ids[-1] < window:
         if j not in skip and commands[j] and same(commands[start], commands[j]):
             ids.append(j)
+        elif barriers is not None and barriers[j]:
+            break
         j += 1
     return ids
 
 
 def find_loops(
-    steps: list[Step], window: int = 6, min_repeats: int = 3, near_threshold: float = 0.9
+    steps: list[Step],
+    window: int = 6,
+    min_repeats: int = 3,
+    near_threshold: float = 0.9,
+    edit_resets: bool = True,
 ) -> tuple[list[Loop], list[Loop]]:
     """Find exact and near-duplicate command loops.
 
@@ -183,14 +197,24 @@ def find_loops(
     or above ``near_threshold`` against the first command of the group, and
     exclude steps already in an exact loop. Each step is reported in at most
     one loop of each kind.
+
+    With ``edit_resets`` (the default) an edit step between two repeats of a
+    command that is not an edit ends the group: rerunning the same test after
+    changing the code is the normal edit-test cycle, not a loop. Repeated
+    edits are still gathered, since an edit that does not take is the loop.
     """
     commands = [normalise_command(s.command) if s.command else "" for s in steps]
+    is_edit = [s.tool == EDIT for s in steps]
+
+    def barriers_for(i: int) -> list[bool] | None:
+        return None if not edit_resets or is_edit[i] else is_edit
+
     exact: list[Loop] = []
     exact_steps: set[int] = set()
     for i, c in enumerate(commands):
         if not c or i in exact_steps:
             continue
-        ids = _collect(commands, i, window, exact_steps, lambda a, b: a == b)
+        ids = _collect(commands, i, window, exact_steps, lambda a, b: a == b, barriers_for(i))
         if len(ids) >= min_repeats:
             exact.append(Loop("exact", steps[i].command.strip(), ids))
             exact_steps.update(ids)
@@ -201,7 +225,14 @@ def find_loops(
     for i, c in enumerate(commands):
         if not c or i in skip:
             continue
-        ids = _collect(commands, i, window, skip, lambda a, b: near_duplicate(a, b, near_threshold))
+        ids = _collect(
+            commands,
+            i,
+            window,
+            skip,
+            lambda a, b: near_duplicate(a, b, near_threshold),
+            barriers_for(i),
+        )
         if len(ids) >= min_repeats:
             near.append(Loop("near", steps[i].command.strip(), ids))
             near_steps.update(ids)
@@ -253,6 +284,7 @@ def run_metrics(
     min_repeats: int = 3,
     near_threshold: float = 0.9,
     infer_errors: str = "auto",
+    edit_resets: bool = True,
 ) -> RunMetrics:
     """Compute every per-run metric for one trajectory.
 
@@ -266,7 +298,7 @@ def run_metrics(
     test_ids = [s.index for s in steps if s.tool == TEST]
     edits = len(edit_ids)
     test_runs = len(test_ids)
-    exact, near = find_loops(steps, window, min_repeats, near_threshold)
+    exact, near = find_loops(steps, window, min_repeats, near_threshold, edit_resets)
     looped = {i for lp in exact + near for i in lp.step_ids}
     failed = step_errors(steps, infer_errors)
     errors = [s.index for s, f in zip(steps, failed, strict=True) if f]

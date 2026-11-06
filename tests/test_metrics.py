@@ -184,3 +184,20 @@ def test_run_metrics_inferred_errors():
     assert m.max_error_streak == 2
     m2 = run_metrics(Trajectory("t", steps), infer_errors="never")
     assert m2.error_steps == 0 and not m2.errors_inferred
+
+
+def test_edit_between_repeats_ends_group():
+    tools = ["test", "edit", "test", "edit", "test", "edit", "test"]
+    cmds = ["python r.py", "edit 1:1", "python r.py", "edit 2:2", "python r.py", "edit 3:3"]
+    cmds.append("python r.py")
+    steps = mk(cmds, tools=tools)
+    exact, near = find_loops(steps, window=6, min_repeats=3, near_threshold=0.99)
+    assert exact == [] and near == []
+    exact, _ = find_loops(steps, window=6, min_repeats=3, edit_resets=False)
+    assert [lp.step_ids for lp in exact] == [[0, 2, 4, 6]]
+
+
+def test_repeated_edits_still_loop():
+    steps = mk(["edit 5:5", "edit 5:5", "edit 5:5"], tools=["edit"] * 3)
+    exact, _ = find_loops(steps, window=6, min_repeats=3)
+    assert [lp.step_ids for lp in exact] == [[0, 1, 2]]
