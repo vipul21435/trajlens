@@ -164,7 +164,8 @@ def _run_detail(i: int, r: dict) -> str:
         for s in f["step_ids"]:
             evidence.setdefault(s, []).append(f["label"])
     keys = [
-        "steps", "edits", "test_runs", "first_edit_step", "first_test_step", "last_edit_step",
+        "steps", "edits", "failed_edits", "test_runs", "failed_test_runs", "first_edit_step",
+        "first_test_step", "last_edit_step",
         "last_test_step", "tests_after_last_edit", "looped_steps", "error_steps",
         "errors_inferred", "max_error_streak", "observation_chars", "observation_growth",
         "largest_observation_chars", "submitted", "patch_empty", "duration_seconds",

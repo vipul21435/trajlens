@@ -100,7 +100,9 @@ class RunMetrics:
     steps: int
     tool_mix: dict[str, int]
     edits: int
+    failed_edits: int
     test_runs: int
+    failed_test_runs: int
     edits_per_test_run: float | None
     first_edit_step: int | None
     first_test_step: int | None
@@ -352,7 +354,9 @@ def run_metrics(
         steps=n,
         tool_mix=tool_mix,
         edits=edits,
+        failed_edits=sum(1 for s, f in zip(steps, failed, strict=True) if f and s.tool == EDIT),
         test_runs=test_runs,
+        failed_test_runs=sum(1 for s, f in zip(steps, failed, strict=True) if f and s.tool == TEST),
         edits_per_test_run=(edits / test_runs) if test_runs else None,
         first_edit_step=edit_ids[0] if edit_ids else None,
         first_test_step=test_ids[0] if test_ids else None,

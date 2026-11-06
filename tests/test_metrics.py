@@ -201,3 +201,13 @@ def test_repeated_edits_still_loop():
     steps = mk(["edit 5:5", "edit 5:5", "edit 5:5"], tools=["edit"] * 3)
     exact, _ = find_loops(steps, window=6, min_repeats=3)
     assert [lp.step_ids for lp in exact] == [[0, 1, 2]]
+
+
+def test_failed_edits_and_tests():
+    steps = mk(
+        ["edit 1:1", "edit 1:1", "pytest", "pytest"],
+        exit_codes=[1, 0, 1, 0],
+        tools=["edit", "edit", "test", "test"],
+    )
+    m = run_metrics(Trajectory("t", steps))
+    assert (m.edits, m.failed_edits, m.test_runs, m.failed_test_runs) == (2, 1, 2, 1)
