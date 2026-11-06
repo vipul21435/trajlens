@@ -2,6 +2,7 @@
 
 trajlens analyze RUN [RUN ...] [--json OUT] [--html OUT] [--format NAME]
 trajlens convert RUN [RUN ...] --out DIR [--format NAME]
+trajlens show RUN [--format NAME] [--width N]
 """
 
 from __future__ import annotations
@@ -14,11 +15,19 @@ from pathlib import Path
 from trajlens import __version__
 from trajlens.adapters import FORMATS, load
 from trajlens.adapters.generic import dump_generic
-from trajlens.analysis import GROUP_KEYS, Options, aggregate, analyze_paths
+from trajlens.analysis import GROUP_KEYS, Options, aggregate, analyze_paths, analyze_run
 from trajlens.html import render_html
 from trajlens.metrics import INFER_MODES
 
-__all__ = ["aggregate", "analyze_paths", "build_parser", "convert", "format_text", "main"]
+__all__ = [
+    "aggregate",
+    "analyze_paths",
+    "build_parser",
+    "convert",
+    "format_run",
+    "format_text",
+    "main",
+]
 
 
 def format_text(report: dict) -> str:
@@ -98,11 +107,42 @@ def build_parser() -> argparse.ArgumentParser:
         choices=INFER_MODES,
         help="read failures from observation text when a step has no exit code",
     )
+    s = sub.add_parser("show", help="print one run step by step with its findings")
+    s.add_argument("path", type=Path)
+    s.add_argument("--format", default="auto", choices=("auto", *FORMATS))
+    s.add_argument("--width", type=int, default=100, help="cut each line to this many characters")
     c = sub.add_parser("convert", help="rewrite trajectory files as generic JSONL")
     c.add_argument("paths", nargs="+", type=Path)
     c.add_argument("--format", default="auto", choices=("auto", *FORMATS))
     c.add_argument("--out", type=Path, required=True, help="directory for the .jsonl files")
     return p
+
+
+def format_run(run: dict, width: int = 100) -> str:
+    """One run as text: findings first, then one line per step.
+
+    Step lines read ``index tool exit observation-chars command``; a ``!``
+    marks a failed step and a ``*`` a step some finding cites as evidence.
+    """
+    m = run["metrics"]
+    cited: set[int] = {i for f in run["findings"] for i in f["step_ids"]}
+    lines = [
+        f"{m['run_id']} ({run['source_format']}): {m['steps']} steps, "
+        f"resolved {run.get('resolved')}, exit status {run.get('exit_status') or '-'}"
+    ]
+    for f in run["findings"]:
+        ids = ",".join(str(i) for i in f["step_ids"]) or "-"
+        lines.append(f"  {f['label']}: {f['detail']} [steps {ids}]")
+    if not run["findings"]:
+        lines.append("  no findings")
+    for st in run.get("steps", []):
+        first = st["command"].strip().splitlines()[0] if st["command"].strip() else ""
+        code = "-" if st["exit_code"] is None else str(st["exit_code"])
+        mark = ("!" if st["error"] else " ") + ("*" if st["index"] in cited else " ")
+        size = st["observation_chars"]
+        line = f"{st['index']:4d}{mark} {st['tool']:6s} {code:>3s} {size:7d}  {first}"
+        lines.append(line[:width])
+    return "\n".join(lines)
 
 
 def _safe_name(run_id: str) -> str:
@@ -129,6 +169,14 @@ def convert(paths: list[Path], fmt: str, out: Path) -> list[Path]:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.cmd == "show":
+        try:
+            run = analyze_run(load(args.path, args.format), Options(), str(args.path), steps=True)
+        except (OSError, ValueError) as exc:
+            print(f"trajlens: {exc}", file=sys.stderr)
+            return 2
+        print(format_run(run, args.width))
+        return 0
     if args.cmd == "convert":
         try:
             written = convert(args.paths, args.format, args.out)

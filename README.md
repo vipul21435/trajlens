@@ -50,6 +50,37 @@ tool mix, the failure-class table with the rule text, a run table that filters b
 per-run step tables in which every evidence step is highlighted and linked from its finding.
 The report data is embedded in the page as JSON.
 
+`trajlens show RUN` prints one run step by step: index, `!` for a failed step, `*` for a
+step a finding cites, tool class, exit code, observation size and the first line of the
+command. On one run of the public sample used in the results below (row 74386 of
+nebius/SWE-agent-trajectories, fetched with `scripts/fetch_nebius_sample.py`):
+
+```
+$ trajlens show nebius-sample/row74386.json --format chat --width 96
+row74386 (chat): 13 steps, resolved False, exit status submitted
+  looping: exact repeat of 'edit 350:358 ...' across 5 steps [steps 5,6,7,8,9]
+  never_tested: 8 edits and no test run [steps 4,5,6,7,8,9,10,11]
+  tool_error_cascade: 6 consecutive error steps [steps 4,5,6,7,8,9]
+   0   search   -     317  search_dir "InconsistentPedigreeException"
+   1   read     -    3818  open biomedsheets/shortcuts/germline.py
+   2   search   -     542  search_file "InconsistentPedigreeException" biomedsheets/shortcuts/ge
+   3   read     -    5135  goto 351
+   4!* edit     -    3404  edit 350:358
+   5!* edit     -    3404  edit 350:358
+   6!* edit     -    3404  edit 350:358
+   7!* edit     -    3404  edit 350:358
+   8!* edit     -    3404  edit 350:358
+   9!* edit     -    3404  edit 350:358
+  10 * edit     -    5194  edit 350:350
+  11 * edit     -    5231  edit 357:357
+  12   submit   -       0  submit
+```
+
+The agent edited lines 350 to 358 six times in a row, five times with identical text;
+SWE-agent rejected each attempt (the failures are
+inferred from its syntax-error message, since the format has no exit codes), and the run
+submitted without ever running code.
+
 `trajlens convert RUN... --out DIR` rewrites any supported input as generic JSONL.
 
 The example script analyses every fixture and writes both reports:

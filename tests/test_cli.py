@@ -102,3 +102,15 @@ def test_group_by_model(capsys):
 def test_group_by_cli(capsys):
     assert main(["analyze", str(FX / "good.jsonl"), "--group-by", "source_format"]) == 0
     assert "source_format generic: 1 runs; with finding: none" in capsys.readouterr().out
+
+
+def test_show_marks_evidence_and_errors(capsys):
+    assert main(["show", str(FX / "loop.jsonl"), "--width", "60"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].startswith("loop (generic): 7 steps")
+    assert any(line.startswith("  looping:") for line in out)
+    step2 = [line for line in out if line.startswith("   2")][0]
+    assert step2[4:6] == "!*" and len(step2) <= 60
+    assert main(["show", str(FX / "good.jsonl")]) == 0
+    assert "  no findings" in capsys.readouterr().out
+    assert main(["show", "missing.jsonl"]) == 2
