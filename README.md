@@ -517,8 +517,13 @@ of github.com/SWE-agent/SWE-agent (9 of them capture-the-flag demonstrations, no
 fixes): 22 runs, mean 10.5 steps, mean error rate 0.057 (inferred), findings looping 1,
 never_tested 5, context_blow_up 1, edited_tests 2, empty_submission 1, no finding 15. The two
 mini-swe-agent sample files under `tests/test_data/` of github.com/SWE-agent/mini-swe-agent
-parse to 10 and 2 steps; both are labelled empty_submission because they are plain message
-lists, a form that carries no submission field, so the patch is empty.
+parse to 10 and 2 steps (`trajlens analyze mini-swe-agent-data/*.traj.json`). Both are plain
+message lists with no submission field, so the patch is read from the output of the final
+submit command, which prints `git diff --cached`. The 10-step run fixes
+`tests/missing_colon.py`, the file its issue names; it is labelled never_tested and, because
+the file sits under `tests/`, edited_tests, which is a false positive of the path rule on this
+toy repository. The 2-step run submits without changing anything and is labelled
+empty_submission.
 
 ## Limitations
 

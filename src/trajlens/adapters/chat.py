@@ -20,6 +20,8 @@ role (``role``) and a text (``content`` or ``text``; a list of
 * Object inputs may carry ``patch`` (or ``generated_patch`` or
   ``submission``), ``exit_status``, ``resolved`` (or ``target``),
   ``instance_id`` (or ``task_id``) and ``model`` (or ``model_name``).
+  Without a patch field, a run that ends with mini-swe-agent's submit
+  command takes the diff that command printed as its patch.
 
 No exit codes or timestamps are present in this shape; failures are inferred
 from observation text by the metrics (see ``--infer-errors``).
@@ -32,7 +34,7 @@ import re
 from pathlib import Path
 
 from trajlens.adapters.generic import classify_tool
-from trajlens.adapters.minisweagent import SUBMIT_MARKERS
+from trajlens.adapters.minisweagent import SUBMIT_MARKERS, patch_from_submit
 from trajlens.model import OTHER, SUBMIT, Step, Trajectory
 
 _FENCE_RE = re.compile(r"^```[^\n`]*\n(.*?)^```[ \t]*$", re.DOTALL | re.MULTILINE)
@@ -99,6 +101,7 @@ def parse_chat(data: object, run_id: str) -> Trajectory:
     if pending is not None:
         _append(traj, pending, "")
     traj.patch = str(_first(meta, "patch", "generated_patch", "submission") or "")
+    traj.patch = traj.patch or patch_from_submit(traj.steps)
     traj.task_id = str(_first(meta, "task_id", "instance_id") or "")
     traj.model = str(_first(meta, "model", "model_name") or "")
     if meta.get("exit_status") is not None:

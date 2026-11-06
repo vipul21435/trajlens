@@ -17,7 +17,10 @@ from the ``returncode`` tag; the observation is the text inside ``output``
 
 A command whose text contains ``COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT`` or
 ``MINI_SWE_AGENT_FINAL_OUTPUT`` is the framework's submit signal and is
-classified as ``submit``. Every other command is classified by its text as in
+classified as ``submit``. The final patch is ``info.submission``; when that
+is missing (the plain message list) it is the output of the submit command
+from its first ``diff --git`` line, since that command prints
+``git diff --cached``. Every other command is classified by its text as in
 the generic adapter (test runner, in-place edit, pager, search, shell).
 """
 
@@ -51,6 +54,23 @@ def parse_observation(content: str) -> tuple[int | None, str]:
     out = _OUT_RE.search(text)
     code = int(rc.group(1)) if rc else None
     return code, (out.group(1) if out else text)
+
+
+def patch_from_submit(steps: list[Step]) -> str:
+    """The diff the final submit command printed, or "" when there is none.
+
+    mini-swe-agent's submit command is ``echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT
+    && git add -A && git diff --cached``, so its output, the last user
+    message, is the submission. The patch is that output from its first
+    ``diff --git`` line on.
+    """
+    if not steps or steps[-1].tool != SUBMIT:
+        return ""
+    last = steps[-1]
+    if not any(marker in last.command for marker in SUBMIT_MARKERS):
+        return ""
+    pos = last.observation.find("diff --git")
+    return last.observation[pos:] if pos >= 0 else ""
 
 
 def _tool_for(command: str) -> tuple[str, str]:
@@ -90,7 +110,7 @@ def parse_minisweagent(data: object, run_id: str) -> Trajectory:
             pending = None
     if pending is not None:
         _append(traj, pending, None, "")
-    traj.patch = str(info.get("submission") or "")
+    traj.patch = str(info.get("submission") or "") or patch_from_submit(traj.steps)
     traj.extra["exit_status"] = str(info.get("exit_status") or "")
     stats = info.get("model_stats") if isinstance(info.get("model_stats"), dict) else {}
     traj.extra["api_calls"] = _opt_int(stats.get("api_calls"))
