@@ -3,6 +3,7 @@
 trajlens analyze RUN [RUN ...] [--json OUT] [--html OUT] [--format NAME] [--fail-on CLASSES]
 trajlens convert RUN [RUN ...] --out DIR [--format NAME]
 trajlens show RUN [--format NAME] [--width N]
+trajlens audit RUN [RUN ...] --label CLASS [--n 20] [--seed 0] [--format NAME]
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from trajlens.metrics import INFER_MODES
 
 __all__ = [
     "aggregate",
+    "audit",
     "analyze_paths",
     "build_parser",
     "convert",
@@ -131,6 +133,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("path", type=Path)
     s.add_argument("--format", default="auto", choices=("auto", *FORMATS))
     s.add_argument("--width", type=int, default=100, help="cut each line to this many characters")
+    au = sub.add_parser(
+        "audit", help="print a seeded random sample of runs carrying one class, for reading"
+    )
+    au.add_argument("paths", nargs="+", type=Path)
+    au.add_argument("--label", required=True, choices=FAILURE_CLASSES)
+    au.add_argument("--n", type=int, default=20, help="runs to draw")
+    au.add_argument("--seed", type=int, default=0)
+    au.add_argument("--format", default="auto", choices=("auto", *FORMATS))
+    au.add_argument("--width", type=int, default=100)
     c = sub.add_parser("convert", help="rewrite trajectory files as generic JSONL")
     c.add_argument("paths", nargs="+", type=Path)
     c.add_argument("--format", default="auto", choices=("auto", *FORMATS))
@@ -165,6 +176,20 @@ def format_run(run: dict, width: int = 100) -> str:
     return "\n".join(lines)
 
 
+def audit(paths: list[Path], fmt: str, label: str, n: int, seed: int) -> tuple[int, list[dict]]:
+    """Draw up to ``n`` runs carrying ``label`` with ``random.Random(seed).sample``.
+
+    Runs are considered in the order of ``paths``; returns the number of runs
+    carrying the label and the drawn runs (with step rows).
+    """
+    import random
+
+    runs = [analyze_run(load(p, fmt), Options(), str(p), steps=True) for p in paths]
+    hits = [r for r in runs if any(f["label"] == label for f in r["findings"])]
+    drawn = random.Random(seed).sample(hits, min(n, len(hits)))
+    return len(hits), drawn
+
+
 def _safe_name(run_id: str) -> str:
     keep = "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in run_id)
     return keep.strip(".") or "run"
@@ -196,6 +221,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"trajlens: {exc}", file=sys.stderr)
             return 2
         print(format_run(run, args.width))
+        return 0
+    if args.cmd == "audit":
+        try:
+            total, drawn = audit(args.paths, args.format, args.label, args.n, args.seed)
+        except (OSError, ValueError) as exc:
+            print(f"trajlens: {exc}", file=sys.stderr)
+            return 2
+        print(f"{total} of {len(args.paths)} runs carry {args.label}; showing {len(drawn)}")
+        for run in drawn:
+            print()
+            print(format_run(run, args.width))
         return 0
     if args.cmd == "convert":
         try:

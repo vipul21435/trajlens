@@ -154,3 +154,16 @@ def test_csv_output(tmp_path):
     assert rows[0]["looping"] == "1" and rows[1]["looping"] == "0"
     assert rows[0]["source_format"] == "generic" and rows[0]["resolved"] == ""
     assert rows[1]["first_test_step"] == "3"
+
+
+def test_audit_draws_seeded_sample(capsys):
+    paths = [str(p) for p in sorted(FX.glob("*.jsonl"))]
+    assert main(["audit", *paths, "--label", "looping", "--n", "5", "--seed", "3"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("2 of 5 runs carry looping; showing 2")
+    assert "loop (generic)" in out and "near_loop (generic)" in out
+    assert main(["audit", *paths, "--label", "looping", "--n", "1", "--seed", "3"]) == 0
+    first = capsys.readouterr().out
+    assert main(["audit", *paths, "--label", "looping", "--n", "1", "--seed", "3"]) == 0
+    assert capsys.readouterr().out == first
+    assert main(["audit", "missing.jsonl", "--label", "looping"]) == 2

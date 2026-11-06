@@ -192,8 +192,9 @@ rows are therefore not untouched. The effect on the `looping` class over all 400
 | `--no-edit-reset` | 4 | 108 |
 | defaults | 1 | 94 |
 
-A hand check of the defaults: 20 `looping` findings drawn at random (seed 2026) from the 75
-held-out runs that carry one were read step by step with `trajlens show`. 19 were repeats
+A hand check of the defaults: 20 `looping` findings drawn at random from the 75 held-out runs
+that carry one were read step by step
+(`trajlens audit $(ls nebius-sample/row*.json | tail -n 300) --format chat --label looping --n 20 --seed 2026`). 19 were repeats
 that brought nothing new: the same edit rejected for the same syntax error up to 24 times,
 `find. -name ...` (a typo answered by `command not found`) 262 times, the same file opened or
 the same `find_file` issued again and again. The twentieth was a `grep` for one function over
