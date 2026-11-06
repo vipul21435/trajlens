@@ -42,3 +42,24 @@ def test_hunk_lines_that_look_like_markers_are_not_paths():
     assert patch_paths(patch) == ["doc.txt"]
     two = patch + "--- a/b.txt\n+++ b/b.txt\n@@ -0,0 +1 @@\n+x\n"
     assert patch_paths(two) == ["doc.txt", "b.txt"]
+
+
+def test_hunk_counts_decide_where_the_hunk_ends():
+    # "-1" has no count (one line); the removed line starts with "-- ".
+    patch = (
+        "--- a/notes.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n--- removed rule\n"
+        "--- a/gone.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n"
+        "--- a/src/b.py\n+++ b/src/b.py\n@@ -1,2 +0,0 @@\n--- one\n--- two\n"
+        "--- a/c.txt\n+++ b/c.txt\n@@ -1 +1,2 @@\n ctx\n+++ added\n"
+        "--- /dev/null\n+++ b/e.txt\n@@ -0,0 +1,2 @@\n+++ one\n+++ two\n"
+        "--- a/f.txt\n+++ b/f.txt\n@@ -1,3 +1 @@\n ctx\n--- r1\n--- r2\n"
+        "--- a/d.txt\n+++ b/d.txt\n"
+    )
+    want = ["notes.txt", "gone.txt", "src/b.py", "c.txt", "e.txt", "f.txt", "d.txt"]
+    assert patch_paths(patch) == want
+
+
+def test_unquoted_space_path_split_where_halves_agree():
+    patch = "diff --git a/x b/y b/x b/y\nnew file mode 100644\n"
+    assert patch_paths(patch) == ["x b/y"]
+    assert new_files(patch) == ["x b/y"]
