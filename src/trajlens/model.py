@@ -54,6 +54,9 @@ class Trajectory:
     source_format: str = "generic"
     task_id: str = ""
     model: str = ""
+    # Whether the task's tests passed on the final patch, when the source
+    # records it; None when unknown.
+    resolved: bool | None = None
     extra: dict = field(default_factory=dict)
 
     def __len__(self) -> int:

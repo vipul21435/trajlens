@@ -8,76 +8,14 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import Counter
 from pathlib import Path
 
 from trajlens import __version__
-from trajlens.adapters import FORMATS, load
-from trajlens.classify import FAILURE_CLASSES, classify_run
-from trajlens.metrics import INFER_MODES, run_metrics
+from trajlens.adapters import FORMATS
+from trajlens.analysis import Options, aggregate, analyze_paths
+from trajlens.metrics import INFER_MODES
 
-
-def analyze_paths(
-    paths: list[Path],
-    fmt: str = "auto",
-    window: int = 6,
-    min_repeats: int = 3,
-    near_threshold: float = 0.9,
-    loop_min_steps: int = 4,
-    cascade_min: int = 4,
-    blowup_chars: int = 20000,
-    growth_ratio: float = 5.0,
-    infer_errors: str = "auto",
-) -> dict:
-    """Analyse every file and return the report as a plain dict."""
-    runs = []
-    for p in paths:
-        traj = load(p, fmt)
-        m = run_metrics(traj, window, min_repeats, near_threshold, infer_errors)
-        findings = classify_run(traj, m, loop_min_steps, cascade_min, blowup_chars, growth_ratio)
-        runs.append(
-            {
-                "path": str(p),
-                "metrics": m.to_dict(),
-                "findings": [f.to_dict() for f in findings],
-            }
-        )
-    return {"version": __version__, "runs": runs, "aggregate": aggregate(runs)}
-
-
-def _mean(values: list[float]) -> float | None:
-    return (sum(values) / len(values)) if values else None
-
-
-def aggregate(runs: list[dict]) -> dict:
-    """Totals and means across runs."""
-    n = len(runs)
-    mets = [r["metrics"] for r in runs]
-    labels = Counter(f["label"] for r in runs for f in r["findings"])
-    runs_with = Counter(lab for r in runs for lab in {f["label"] for f in r["findings"]})
-    tool_mix: Counter = Counter()
-    for m in mets:
-        tool_mix.update(m["tool_mix"])
-    return {
-        "runs": n,
-        "mean_steps": _mean([m["steps"] for m in mets]),
-        "mean_edits": _mean([m["edits"] for m in mets]),
-        "mean_test_runs": _mean([m["test_runs"] for m in mets]),
-        "mean_error_rate": _mean([m["error_rate"] for m in mets]),
-        "mean_first_edit_step": _mean(
-            [m["first_edit_step"] for m in mets if m["first_edit_step"] is not None]
-        ),
-        "mean_first_test_step": _mean(
-            [m["first_test_step"] for m in mets if m["first_test_step"] is not None]
-        ),
-        "runs_with_loops": sum(1 for m in mets if m["looped_steps"]),
-        "runs_tests_after_last_edit": sum(1 for m in mets if m["tests_after_last_edit"]),
-        "runs_patch_touches_tests": sum(1 for m in mets if m["patch_touches_tests"]),
-        "runs_empty_patch": sum(1 for m in mets if m["patch_empty"]),
-        "tool_mix": dict(tool_mix),
-        "findings_total": {lab: labels.get(lab, 0) for lab in FAILURE_CLASSES},
-        "runs_with_finding": {lab: runs_with.get(lab, 0) for lab in FAILURE_CLASSES},
-    }
+__all__ = ["aggregate", "analyze_paths", "build_parser", "format_text", "main"]
 
 
 def format_text(report: dict) -> str:
@@ -102,6 +40,11 @@ def format_text(report: dict) -> str:
         found = {k: v for k, v in a["runs_with_finding"].items() if v}
         shown = ", ".join(f"{k}={v}" for k, v in found.items()) or "none"
         lines.append("runs with finding: " + shown)
+        lines.append(f"runs with no finding: {a['runs_no_finding']}")
+        for key, block in a.get("by_outcome", {}).items():
+            found = {k: v for k, v in block["runs_with_finding"].items() if v}
+            shown = ", ".join(f"{k}={v}" for k, v in found.items()) or "none"
+            lines.append(f"{key} runs: {block['runs']}; with finding: {shown}")
     return "\n".join(lines)
 
 
@@ -132,18 +75,17 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        report = analyze_paths(
-            args.paths,
-            args.format,
-            args.window,
-            args.min_repeats,
-            args.near_threshold,
-            args.loop_min_steps,
-            args.cascade_min,
-            args.blowup_chars,
-            args.growth_ratio,
-            args.infer_errors,
+        opts = Options(
+            window=args.window,
+            min_repeats=args.min_repeats,
+            near_threshold=args.near_threshold,
+            loop_min_steps=args.loop_min_steps,
+            cascade_min=args.cascade_min,
+            blowup_chars=args.blowup_chars,
+            growth_ratio=args.growth_ratio,
+            infer_errors=args.infer_errors,
         )
+        report = analyze_paths(args.paths, args.format, opts)
     except (OSError, ValueError) as exc:
         print(f"trajlens: {exc}", file=sys.stderr)
         return 2

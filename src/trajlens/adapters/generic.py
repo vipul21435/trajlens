@@ -13,7 +13,9 @@ Recognised keys (all optional except ``action`` or ``command``):
 ``tokens_out``    completion tokens for the step
 
 A line with ``"type": "meta"`` carries run level fields: ``run_id``,
-``task_id``, ``model`` and ``patch`` (the final diff as a string). A line with
+``task_id``, ``model``, ``patch`` (the final diff as a string),
+``exit_status`` (the agent framework's own end state, a string) and
+``resolved`` (true or false: whether the task's tests passed on the patch). A line with
 ``"type": "patch"`` and a ``patch`` key is also accepted.
 
 The ``action`` string is classified into a tool class by :func:`classify_tool`.
@@ -164,6 +166,10 @@ def load_generic(path: str | Path) -> Trajectory:
                 traj.model = str(rec.get("model", ""))
                 if "patch" in rec:
                     traj.patch = str(rec["patch"] or "")
+                if rec.get("exit_status") is not None:
+                    traj.extra["exit_status"] = str(rec["exit_status"])
+                if isinstance(rec.get("resolved"), bool):
+                    traj.resolved = rec["resolved"]
                 continue
             if kind == "patch":
                 traj.patch = str(rec.get("patch", "") or "")
