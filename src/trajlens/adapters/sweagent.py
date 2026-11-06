@@ -103,6 +103,12 @@ def parse_sweagent(data: dict, run_id: str) -> Trajectory:
         raise ValueError("SWE-agent .traj must be a JSON object")
     traj = Trajectory(run_id=run_id, source_format="sweagent")
     if isinstance(data.get("trajectory"), list):
+        items = [x for x in data["trajectory"] if isinstance(x, dict)]
+        if items and not any("action" in x for x in items):
+            raise ValueError(
+                "no trajectory step has an 'action' key; is this a chat or tool-call "
+                "transcript? pass --format chat or --format toolcalls"
+            )
         traj.steps = _steps_from_trajectory(data["trajectory"])
     elif isinstance(data.get("history"), list):
         traj.steps = _steps_from_history(data["history"])

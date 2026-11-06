@@ -7,13 +7,16 @@ guessed from the file name and, for ``.json``, from the document shape:
 * ``*.traj``                        SWE-agent
 * ``*.traj.json``                   mini-swe-agent
 * other ``*.json``: a list of ``role``/``content`` messages or an object
-  with ``messages`` is mini-swe-agent; a list of events with ``action`` or
+  with ``messages`` is mini-swe-agent, unless a message carries
+  ``tool_calls`` (then ``toolcalls``); a list of events with ``action`` or
   ``observation`` keys, or an object with ``events``/``history`` holding such
-  events, is OpenHands; an object with ``trajectory`` is SWE-agent.
+  events, is OpenHands; an object whose ``trajectory`` is a list of
+  ``role`` messages with no ``action`` is ``toolcalls`` when a message has
+  ``tool_calls`` and ``chat`` otherwise; any other object with
+  ``trajectory`` is SWE-agent.
 
-The ``chat`` format (a model transcript with fenced commands) and the
-``toolcalls`` format (a function-calling transcript) are never guessed,
-because their shape overlaps the others; pass ``--format``.
+A ``chat`` transcript held as a bare list looks like a mini-swe-agent file
+and is read as one; pass ``--format chat`` for it.
 """
 
 from __future__ import annotations
@@ -51,14 +54,31 @@ def _looks_like_messages(items: list) -> bool:
     return bool(dicts) and all("role" in x for x in dicts)
 
 
-def detect_json(data) -> str:
+def _has_tool_calls(items: list) -> bool:
+    return any(isinstance(x, dict) and x.get("tool_calls") for x in items)
+
+
+def _transcript_format(items: object) -> str | None:
+    """``toolcalls`` or ``chat`` when ``items`` is a message list rather than SWE-agent steps."""
+    if not isinstance(items, list):
+        return None
+    dicts = [x for x in items if isinstance(x, dict)]
+    if not dicts or any("action" in x for x in dicts) or not all("role" in x for x in dicts):
+        return None
+    return "toolcalls" if _has_tool_calls(dicts) else "chat"
+
+
+def detect_json(data: object) -> str:
     """Name the format of a parsed ``.json`` document, or raise ValueError."""
     if isinstance(data, list):
         if _looks_like_events(data):
             return "openhands"
         if _looks_like_messages(data):
-            return "minisweagent"
+            return "toolcalls" if _has_tool_calls(data) else "minisweagent"
     elif isinstance(data, dict):
+        transcript = _transcript_format(data.get("trajectory"))
+        if transcript is not None:
+            return transcript
         plain_history = "history" in data and "messages" not in data and "events" not in data
         if "trajectory" in data or plain_history:
             return "sweagent"
