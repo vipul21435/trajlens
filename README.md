@@ -285,8 +285,10 @@ uv run --with matplotlib python scripts/real_data_report.py nebius-sample --char
 trajlens analyze --format chat nebius-sample/row*.json --json report.json --html report.html
 ```
 
-The last command, on all 400 files including the 9 MB HTML report, took 2.9 to 4.0 s wall
-clock over four runs on the machine used here (`time`). The tables are the output of the second command.
+The last command, on all 400 files including the 9 MB HTML report, took 2.9 to 3.0 s wall
+clock over four runs (`/usr/bin/time -p`, one laptop, 1-minute load average 2.4 to 2.6); the
+time depends on the machine and its load, so treat it as a rough scale, not a benchmark.
+The tables are the output of the second command.
 
 Behaviour over all 400 runs, default options:
 
