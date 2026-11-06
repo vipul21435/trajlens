@@ -131,8 +131,11 @@ Known action names decide first (`edit`, `create`, `str_replace_editor`, `open`,
 OpenHands `edit`/`write`/`read`/`finish`). A shell command is classified by regular
 expressions: test runners (`pytest`, `tox`, `go test`, `cargo test`, `npm test`, `jest`,
 `mvn test`, ...) and running a test or reproduction script directly (`python reproduce.py`,
-`python tests/test_io.py`) are `test`; `sed -i`, `patch`, `git apply` are `edit`; pagers and
-`cat` are `read`; `grep`, `find`, `ls` are `search`. Counting `python reproduce.py` as a test
+`python tests/test_io.py`) are `test`; `sed -i`, `patch`, `git apply` and shell writes
+(`cat > f.py << 'EOF'`, `echo x >> f`, `cat << EOF | tee f`, when every command on the first
+line is `cat`, `echo`, `printf` or `tee` and one of them writes a file other than /dev/null)
+are `edit`; other pagers and `cat` are `read`; here-document bodies are file contents and are
+not searched for test runners; `grep`, `find`, `ls` are `search`. Counting `python reproduce.py` as a test
 run follows SWE-agent's default instructions, which ask the agent to reproduce the bug with a
 script and rerun it after the fix; without it nearly every SWE-agent run would be labelled
 `never_tested`.
@@ -140,7 +143,7 @@ script and rerun it after the fix; without it nearly every SWE-agent run would b
 Agents also check their work with throwaway scripts whose names say nothing
 (`python convert.py`). The command alone cannot tell those from any other program, but the
 trajectory can: when the agent created the file earlier in the run (`create <path>`,
-`write <path>`, or a shell redirect such as `cat > check.py`), a later `python <that file>`
+`write <path>`, or a shell redirect or tee such as `cat > check.py`, in a step of any class), a later `python <that file>`
 is reclassified as a test run (`src/trajlens/scripts.py`; `--no-script-tests` turns it off).
 This came from reading 10 `never_tested` findings
 (`trajlens audit $(ls nebius-sample/row*.json | tail -n 300) --format chat --label never_tested --n 10 --seed 1 --no-script-tests`):

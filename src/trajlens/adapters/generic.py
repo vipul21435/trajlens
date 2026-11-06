@@ -64,6 +64,12 @@ _READ_RE = re.compile(r"^\s*(open|view|cat|head|tail|less|read|read_file|goto|sc
 _SEARCH_RE = re.compile(r"^\s*(grep|rg|ag|find|search|search_dir|search_file|find_file|ls|fd)\b")
 _CD_PREFIX_RE = re.compile(r"^\s*cd\s+(\"[^\"]*\"|'[^']*'|\S+)\s*(&&|;)\s*")
 _SUBMIT_RE = re.compile(r"^\s*(submit|finish|exit|done)\b")
+# A shell write: cat, echo, printf or tee whose first line sends output to a
+# file, for example ``cat > check.py << 'EOF'`` or ``echo x >> notes.txt``.
+# ``2>&1`` and writes to /dev/null do not count.
+_WRITER_RE = re.compile(r"^\s*(cat|echo|printf|tee)\b")
+_OUT_REDIRECT_RE = re.compile(r"(?<![0-9&<>])(?:1)?>>?\s*(?!&|/dev/null\b)[\"']?[^\s&|;<>\"']")
+_TEE_TARGET_RE = re.compile(r"^\s*tee\s+(?:-\S+\s+)*(?!/dev/null\b)[\"']?[^\s&|;<>\"'-]")
 
 _ACTION_CLASS = {
     "edit": EDIT,
@@ -91,6 +97,45 @@ _ACTION_CLASS = {
 }
 
 
+_HEREDOC_RE = re.compile(r"<<-?\s*[\"']?(\w+)[\"']?")
+
+
+def strip_heredocs(command: str) -> str:
+    """``command`` without the bodies of its here-documents (the lines up to each delimiter)."""
+    out: list[str] = []
+    ends: list[str] = []
+    for line in (command or "").splitlines():
+        if ends:
+            if line.strip() == ends[0]:
+                ends.pop(0)
+            continue
+        out.append(line)
+        ends.extend(_HEREDOC_RE.findall(line))
+    return "\n".join(out)
+
+
+_QUOTED_RE = re.compile(r"\"(?:[^\"\\]|\\.)*\"|'[^']*'")
+_CHAIN_RE = re.compile(r"&&|\|\||;|\|")
+
+
+def is_shell_write(command: str) -> bool:
+    """True when the first line of ``command`` only writes files with cat, echo, printf or tee.
+
+    Every command chained on that line (``&&``, ``;``, ``|``) must be one of
+    those four and at least one must send output to a file, so
+    ``cat << EOF | tee f.py`` is a write while ``echo "" > cfg && python app.py``
+    and ``printf x | tool > out`` are not.
+    """
+    lines = (command or "").strip().splitlines()
+    first = lines[0] if lines else ""
+    while _CD_PREFIX_RE.match(first):
+        first = _CD_PREFIX_RE.sub("", first, count=1)
+    parts = _CHAIN_RE.split(_QUOTED_RE.sub("Q", first))
+    if not parts or not all(_WRITER_RE.match(part) for part in parts):
+        return False
+    return any(_OUT_REDIRECT_RE.search(part) or _TEE_TARGET_RE.search(part) for part in parts)
+
+
 def classify_tool(action: str, command: str) -> str:
     """Map an action name and its command to one tool class.
 
@@ -98,8 +143,12 @@ def classify_tool(action: str, command: str) -> str:
     A shell action is looked at by its command: a test runner, or a python
     test or reproduction script (``test_*.py``, ``*_test.py``,
     ``reproduce*.py``, ``repro*.py``), is ``test``, an
-    in-place edit is ``edit``, a pager or cat is ``read``, grep/find is
-    ``search``, anything else is ``shell``.
+    in-place edit or a shell write (``cat > f << EOF``, ``echo x > f``,
+    ``tee f``) is ``edit``, a pager or cat is ``read``, grep/find is
+    ``search``, anything else is ``shell``. A test run is checked first,
+    but the test runner is looked for outside here-document bodies only, so
+    ``cat > f.py << EOF`` whose body imports pytest is an edit, while
+    ``echo x > cfg && pytest`` is a test run.
     """
     name = (action or "").strip().lower()
     cmd = (command or "").strip()
@@ -110,8 +159,11 @@ def classify_tool(action: str, command: str) -> str:
     # "cd /repo && grep ..." is a grep: drop leading directory changes.
     while _CD_PREFIX_RE.match(text):
         text = _CD_PREFIX_RE.sub("", text, count=1)
-    if _TEST_RE.search(text) or _SCRIPT_TEST_RE.search(text):
+    shell = strip_heredocs(text)
+    if _TEST_RE.search(shell) or _SCRIPT_TEST_RE.search(shell):
         return TEST
+    if is_shell_write(text):
+        return EDIT
     if _EDIT_RE.match(text):
         return EDIT
     if _SUBMIT_RE.match(text):

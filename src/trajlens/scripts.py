@@ -8,8 +8,9 @@ in the same run, running it is the agent testing its own work.
 
 A file counts as created by the agent when an edit step's command is
 ``create <path>`` or ``write <path>`` (SWE-agent, the OpenHands editor and
-event stream), or a shell step writes it with a redirect
-(``cat > check.py``, ``cat << EOF > check.py``, ``echo ... > check.py``).
+event stream), or any step writes it with a redirect or tee
+(``cat > check.py``, ``cat << EOF > check.py``, ``echo ... > check.py``,
+``tee check.py``), whatever class the step was given.
 A later shell step running ``python <path>`` (any flags, any directory
 prefix) on a file with the same base name is then reclassified as ``test``.
 """
@@ -20,10 +21,12 @@ import re
 from dataclasses import replace
 from pathlib import PurePosixPath
 
+from trajlens.adapters.generic import strip_heredocs
 from trajlens.model import EDIT, SHELL, TEST, Step, Trajectory
 
 _CREATE_RE = re.compile(r"^\s*(?:create|write)\s+[\"']?([^\s\"']+)")
 _REDIRECT_RE = re.compile(r">\s*[\"']?([^\s\"'|;&]+\.py)\b")
+_TEE_RE = re.compile(r"(?:^|[|;&\s])tee\s+(?:-\S+\s+)*[\"']?([^\s\"'|;&]+\.py)\b")
 _RUN_RE = re.compile(r"(?:^|[\s;&|])python[0-9.]*\s+(?:-\S+\s+)*[\"']?([^\s\"';&|]+\.py)\b")
 
 
@@ -33,12 +36,16 @@ def _base(path: str) -> str:
 
 def created_files(step: Step) -> list[str]:
     """Base names of files this step creates."""
+    out: list[str] = []
     if step.tool == EDIT:
         m = _CREATE_RE.match(step.command)
-        return [_base(m.group(1))] if m else []
-    if step.tool == SHELL:
-        return [_base(p) for p in _REDIRECT_RE.findall(step.command)]
-    return []
+        if m:
+            out.append(_base(m.group(1)))
+    shell = strip_heredocs(step.command)
+    for p in _REDIRECT_RE.findall(shell) + _TEE_RE.findall(shell):
+        if _base(p) not in out:
+            out.append(_base(p))
+    return out
 
 
 def run_script(step: Step) -> str | None:
