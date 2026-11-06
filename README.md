@@ -174,7 +174,10 @@ observation characters, the largest observation, and observation growth (mean ob
 length of the last third of steps divided by the first third; undefined, shown as `null`,
 when the first third has no observation text); files in the final patch,
 which of them are test files (by path: `tests/`, `test_*.py`, `*_test.*`, `*.spec.*`,
-`conftest.py`, ...), and which the patch creates; whether a submit step exists; duration from
+`conftest.py`, Django-style `tests.py` and `test.py`, ...), and which the patch creates. Both the
+old and the new path of each `diff --git` header count, so a deleted or renamed test file is
+seen; git's quoted paths are unquoted, and a diff without git headers is read from its
+`---`/`+++` lines outside the hunks; whether a submit step exists; duration from
 timestamps; token totals.
 
 ### Loops

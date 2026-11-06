@@ -19,10 +19,13 @@ _WS = re.compile(r"\s+")
 # Paths that count as test files in the final patch.
 _TEST_PATH_RE = re.compile(
     r"(^|/)(tests?|testing|spec|specs|__tests__)(/|$)|(^|/)(test_[^/]*|[^/]*_test\.[^/]+|"
-    r"[^/]*\.test\.[^/]+|[^/]*\.spec\.[^/]+|conftest\.py)$"
+    r"[^/]*\.test\.[^/]+|[^/]*\.spec\.[^/]+|conftest\.py|tests?\.py)$"
 )
-_DIFF_PATH_RE = re.compile(r"^diff --git a/(\S+) b/(\S+)$", re.MULTILINE)
-_PLUS_PATH_RE = re.compile(r"^\+\+\+ (?:b/)?(\S+)$", re.MULTILINE)
+_HUNK_RE = re.compile(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@")
+_QUOTED_GIT_PATH = r'"((?:[^"\\]|\\.)*)"'
+_DIFF_QUOTED_RE = re.compile(
+    rf"^diff --git (?:{_QUOTED_GIT_PATH}|(\S+)) (?:{_QUOTED_GIT_PATH}|(\S+))$"
+)
 
 # Observation text that marks a failed step when the format records no exit
 # code (SWE-agent .traj files, for one). Each pattern is a message printed by
@@ -138,48 +141,118 @@ class RunMetrics:
         return asdict(self)
 
 
+def _unquote(path: str) -> str:
+    """Undo git's C-style quoting (``\\"``, ``\\\\``, ``\\t``, octal bytes)."""
+    raw = path.encode("latin-1", "backslashreplace").decode("unicode_escape")
+    return raw.encode("latin-1", "replace").decode("utf-8", "replace")
+
+
+def _strip_prefix(path: str, prefix: str) -> str:
+    return path[len(prefix) :] if path.startswith(prefix) else path
+
+
+def _git_header(line: str) -> tuple[str, str] | None:
+    """The a and b paths of a ``diff --git`` line, without their prefixes.
+
+    Git quotes a path only when it holds special characters; a path with a
+    plain space stays unquoted, so ``a/x y b/x y`` is split where the two
+    halves agree.
+    """
+    if not line.startswith("diff --git "):
+        return None
+    m = _DIFF_QUOTED_RE.match(line)
+    if m and (m.group(1) is not None or m.group(3) is not None):
+        a = _unquote(m.group(1)) if m.group(1) is not None else m.group(2)
+        b = _unquote(m.group(3)) if m.group(3) is not None else m.group(4)
+        return _strip_prefix(a, "a/"), _strip_prefix(b, "b/")
+    rest = line[len("diff --git ") :]
+    if not rest.startswith("a/"):
+        return None
+    splits = [i for i in range(len(rest)) if rest.startswith(" b/", i)]
+    if not splits:
+        return None
+    for i in splits:
+        if rest[2:i] == rest[i + 3 :]:
+            return rest[2:i], rest[i + 3 :]
+    return rest[2 : splits[0]], rest[splits[0] + 3 :]
+
+
+def _marker_path(line: str) -> str | None:
+    """The path of a ``---`` or ``+++`` line (no prefix, no timestamp), or None for /dev/null."""
+    path = line[4:].split("\t", 1)[0].strip()
+    if path.startswith('"') and path.endswith('"') and len(path) > 1:
+        path = _unquote(path[1:-1])
+    if path == "/dev/null" or not path:
+        return None
+    return _strip_prefix(_strip_prefix(path, "a/"), "b/")
+
+
 def patch_paths(patch: str) -> list[str]:
     """File paths touched by a unified diff, in order, without duplicates.
 
-    Carriage returns are dropped first: some agent frameworks store the
-    patch with CRLF line ends, which would hide every path from the regexes.
+    From ``diff --git`` headers both the old and the new path are kept, so a
+    file renamed or deleted still counts as touched. A diff without git
+    headers is read from its ``---`` and ``+++`` lines. Carriage returns are
+    dropped first: some agent frameworks store the patch with CRLF line ends.
     """
-    patch = patch.replace("\r", "")
+    lines = patch.replace("\r", "").splitlines()
     seen: list[str] = []
-    for m in _DIFF_PATH_RE.finditer(patch):
-        p = m.group(2)
-        if p not in seen:
-            seen.append(p)
-    if not seen:
-        for m in _PLUS_PATH_RE.finditer(patch):
-            p = m.group(1)
-            if p != "/dev/null" and p not in seen:
-                seen.append(p)
+
+    def add(path: str | None) -> None:
+        if path and path != "/dev/null" and path not in seen:
+            seen.append(path)
+
+    headers = [h for h in (_git_header(line) for line in lines) if h is not None]
+    for a, b in headers:
+        add(a)
+        add(b)
+    if headers:
+        for line in lines:
+            if line.startswith(("rename from ", "copy from ")):
+                add(line.split(" ", 2)[2])
+        return seen
+    old_left = new_left = 0
+    for line in lines:
+        if old_left > 0 or new_left > 0:
+            # Inside a hunk: "--- x" here is a removed line, not a file marker.
+            if line.startswith("-"):
+                old_left -= 1
+            elif line.startswith("+"):
+                new_left -= 1
+            elif not line.startswith("\\"):
+                old_left -= 1
+                new_left -= 1
+            continue
+        hunk = _HUNK_RE.match(line)
+        if hunk:
+            old_left = int(hunk.group(1) or 1)
+            new_left = int(hunk.group(2) or 1)
+        elif line.startswith(("--- ", "+++ ")):
+            add(_marker_path(line))
     return seen
 
 
 def new_files(patch: str) -> list[str]:
     """Paths the diff creates (``new file mode`` or ``--- /dev/null``)."""
-    patch = patch.replace("\r", "")
     out: list[str] = []
     current = None
     prev = ""
-    for line in patch.splitlines():
-        m = _DIFF_PATH_RE.match(line)
-        if m:
-            current = m.group(2)
+    for line in patch.replace("\r", "").splitlines():
+        header = _git_header(line)
+        if header is not None:
+            current = header[1]
         elif line.startswith("new file mode") and current and current not in out:
             out.append(current)
         elif line.startswith("+++ ") and prev == "--- /dev/null":
-            path = line[4:].strip()
-            path = path[2:] if path.startswith("b/") else path
-            if path not in out:
+            path = _marker_path(line)
+            if path and path not in out:
                 out.append(path)
         prev = line
     return out
 
 
 def is_test_path(path: str) -> bool:
+    """True when ``path`` looks like a test file or sits in a test directory."""
     return bool(_TEST_PATH_RE.search(path))
 
 
