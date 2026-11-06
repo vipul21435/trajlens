@@ -14,7 +14,10 @@ untested_final_edit the run has test runs but none after the last edit;
                     evidence: the last edit step and the last test step
 gave_up             no submit step and the final patch is empty, or the last
                     step is an error (exit code, or observation text when the
-                    format has no exit codes); evidence: the last step
+                    format has no exit codes); evidence: the last step. A run
+                    with no steps at all and an empty patch is gave_up too,
+                    with no evidence ids (an empty or wrongly parsed file
+                    looks like this, and it is not a clean run)
 tool_error_cascade  an error streak of at least ``cascade_min`` [4] steps;
                     evidence: the streak's step ids
 context_blow_up     the observations together reach ``context_chars`` [60000]
@@ -67,7 +70,8 @@ RULES: dict[str, str] = {
     "looping": "an exact or near-duplicate command loop of at least loop_min_steps steps",
     "never_tested": "at least one edit and no test run",
     "untested_final_edit": "test runs exist but none after the last edit",
-    "gave_up": "no submit step, and an empty patch or a failed last step",
+    "gave_up": "no submit step, and an empty patch or a failed last step (or no steps at all "
+    "and an empty patch)",
     "tool_error_cascade": "at least cascade_min consecutive failed steps",
     "context_blow_up": "observations reach context_chars characters in total, or one "
     "observation has at least blowup_chars",
@@ -124,6 +128,8 @@ def classify_run(
             )
         )
 
+    if not steps and m.patch_empty:
+        out.append(Finding("gave_up", "no steps and empty patch", []))
     if steps:
         last = steps[-1]
         if not m.submitted and (m.patch_empty or m.last_step_error):

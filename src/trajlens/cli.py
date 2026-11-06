@@ -53,6 +53,8 @@ def format_text(report: dict) -> str:
             f"tests after last edit {m['tests_after_last_edit']}, "
             f"patch files {len(m['patch_files'])}"
         )
+        if not m["steps"]:
+            lines.append(f"  warning: {m['run_id']} has no steps; check the file and --format")
         for f in r["findings"]:
             ids = ",".join(str(i) for i in f["step_ids"]) or "-"
             lines.append(f"  {f['label']}: {f['detail']} [steps {ids}]")

@@ -229,7 +229,7 @@ Each class is a rule over the metrics; a run can carry several. Defaults in brac
 | looping | an exact or near loop of at least `--loop-min-steps` [4] steps | the loop's steps |
 | never_tested | at least one edit and no test run | the edit steps |
 | untested_final_edit | test runs exist but none after the last edit | last edit, last test |
-| gave_up | no submit step, and an empty patch or a failed last step | the last step |
+| gave_up | no submit step, and an empty patch or a failed last step; also a run with no steps and an empty patch (the text output warns about every zero-step run) | the last step; none for a zero-step run |
 | tool_error_cascade | at least `--cascade-min` [4] consecutive failed steps | the streak |
 | context_blow_up | observations reach `--context-chars` [60000] characters in total, or one observation has at least `--blowup-chars` [20000] | the step where the total crosses the limit; the largest observation |
 | edited_tests | the final patch modifies or deletes a test file that existed before the run (created test files count only with `--include-new-tests`) | the edit steps aimed at those files: a path argument, or for line-range editors such as SWE-agent's `edit 10:12` the file last opened; none when no edit step names the file (one written by a script, say); the files are named in the detail |
