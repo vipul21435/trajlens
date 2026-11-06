@@ -137,6 +137,18 @@ run follows SWE-agent's default instructions, which ask the agent to reproduce t
 script and rerun it after the fix; without it nearly every SWE-agent run would be labelled
 `never_tested`.
 
+Agents also check their work with throwaway scripts whose names say nothing
+(`python convert.py`). The command alone cannot tell those from any other program, but the
+trajectory can: when the agent created the file earlier in the run (`create <path>`,
+`write <path>`, or a shell redirect such as `cat > check.py`), a later `python <that file>`
+is reclassified as a test run (`src/trajlens/scripts.py`; `--no-script-tests` turns it off).
+This came from reading 10 `never_tested` findings
+(`trajlens audit $(ls nebius-sample/row*.json | tail -n 300) --format chat --label never_tested --n 10 --seed 1 --no-script-tests`):
+seven runs never executed anything that could check the change, two checked it with scripts
+they had written under other names, and one ran `pylint`, the program the issue was about,
+which is still not recognised. Over the 400 runs the rule moves 9 runs out of `never_tested`
+(21 to 19 resolved, 88 to 81 unresolved).
+
 ### Failed steps
 
 A recorded exit code decides whether a step failed. SWE-agent `.traj` files and chat
@@ -253,8 +265,8 @@ uv run --with matplotlib python scripts/real_data_report.py nebius-sample --char
 trajlens analyze --format chat nebius-sample/row*.json --json report.json --html report.html
 ```
 
-The last command, on all 400 files including the 9 MB HTML report, took 3.1 s wall clock on
-the machine used here (`time`, one run). The tables are the output of the second command.
+The last command, on all 400 files including the 9 MB HTML report, took 2.9 to 4.0 s wall
+clock over four runs on the machine used here (`time`). The tables are the output of the second command.
 
 Behaviour over all 400 runs, default options:
 
@@ -264,17 +276,17 @@ Behaviour over all 400 runs, default options:
 | mean steps | 25.2 |
 | mean edits | 8.5 |
 | mean failed edits (inferred) | 3.3 |
-| mean test runs | 3.0 |
+| mean test runs | 3.1 |
 | mean error rate (inferred) | 0.195 |
 | mean first edit step (runs with an edit) | 2.3 |
-| mean first test step (runs with a test) | 4.6 |
+| mean first test step (runs with a test) | 4.7 |
 | runs with a loop | 120 |
-| runs testing after the last edit | 209 |
+| runs testing after the last edit | 217 |
 | runs submitted | 267 |
 | runs with an empty patch | 49 |
-| runs with no finding | 138 |
-| failed steps by tool class | 2920: edit 1315, test 692, search 575, shell 306, read 32 |
-| tool mix (share of steps) | edit 33.8%, test 12.0%, read 17.9%, search 22.5%, shell 11.2%, submit 2.7% |
+| runs with no finding | 144 |
+| failed steps by tool class | 2920: edit 1315, test 706, search 575, shell 292, read 32 |
+| tool mix (share of steps) | edit 33.8%, test 12.3%, read 17.9%, search 22.5%, shell 10.8%, submit 2.7% |
 
 "Runs with a loop" counts any loop of three or more repeats; the `looping` class below needs
 four. A third of all steps are edits, 3.3 of the 8.5 edits per run failed, and edits are 1,315
@@ -286,20 +298,20 @@ Share of runs carrying each class, resolved against unresolved (95 % Wilson inte
 | class | resolved runs (n=76) | unresolved runs (n=324) |
 | --- | --- | --- |
 | looping | 1/76 = 1.3% [0.2%, 7.1%] | 94/324 = 29.0% [24.3%, 34.2%] |
-| never_tested | 21/76 = 27.6% [18.8%, 38.6%] | 88/324 = 27.2% [22.6%, 32.3%] |
-| untested_final_edit | 1/76 = 1.3% [0.2%, 7.1%] | 69/324 = 21.3% [17.2%, 26.1%] |
+| never_tested | 19/76 = 25.0% [16.6%, 35.8%] | 81/324 = 25.0% [20.6%, 30.0%] |
+| untested_final_edit | 1/76 = 1.3% [0.2%, 7.1%] | 70/324 = 21.6% [17.5%, 26.4%] |
 | gave_up | 0/76 = 0.0% [0.0%, 4.8%] | 35/324 = 10.8% [7.9%, 14.7%] |
 | tool_error_cascade | 4/76 = 5.3% [2.1%, 12.8%] | 59/324 = 18.2% [14.4%, 22.8%] |
 | context_blow_up | 3/76 = 3.9% [1.4%, 11.0%] | 114/324 = 35.2% [30.2%, 40.5%] |
 | edited_tests | 2/76 = 2.6% [0.7%, 9.1%] | 6/324 = 1.9% [0.9%, 4.0%] |
 | empty_submission | 0/76 = 0.0% [0.0%, 4.8%] | 14/324 = 4.3% [2.6%, 7.1%] |
-| (no finding) | 47/76 = 61.8% [50.6%, 71.9%] | 91/324 = 28.1% [23.5%, 33.2%] |
+| (no finding) | 49/76 = 64.5% [53.3%, 74.3%] | 95/324 = 29.3% [24.6%, 34.5%] |
 
 ![Share of runs with each failure class, resolved against unresolved](docs/images/classes_by_outcome.png)
 
 On the 300 held-out rows alone (52 resolved, 248 unresolved) the pattern is the same:
-looping 1.9 % against 29.8 %, untested_final_edit 0.0 % against 20.6 %, context_blow_up
-3.8 % against 37.5 %, no finding 63.5 % against 25.8 %.
+looping 1.9 % against 29.8 %, untested_final_edit 0.0 % against 21.0 %, context_blow_up
+3.8 % against 37.5 %, no finding 65.4 % against 27.0 %.
 
 Agreement of two rules with the exit status the framework recorded (the rules never read it):
 
@@ -317,7 +329,7 @@ each class):
 | exit status | runs | resolved | looping | untested_final_edit | gave_up | tool_error_cascade | context_blow_up | empty_submission |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | submitted | 258 | 28.7% | 11 | 16 | 0 | 17 | 11 | 5 |
-| submitted (exit_context) | 100 | 2.0% | 69 | 44 | 2 | 34 | 92 | 0 |
+| submitted (exit_context) | 100 | 2.0% | 69 | 45 | 2 | 34 | 92 | 0 |
 | early_exit | 18 | 0.0% | 6 | 10 | 18 | 5 | 2 | 0 |
 | exit_context | 15 | 0.0% | 9 | 0 | 15 | 7 | 12 | 0 |
 | submitted_no_patch | 9 | 0.0% | 0 | 0 | 0 | 0 | 0 | 9 |
@@ -328,8 +340,8 @@ consistent with repeated actions filling the context, though counts like these c
 separate cause from effect.
 
 What this says and does not say. `looping`, `untested_final_edit`, `context_blow_up` and
-`gave_up` are far more common in unresolved runs; `never_tested` is not (27.6 % against
-27.2 %), so on this data an agent that edits without running anything is no less likely to
+`gave_up` are far more common in unresolved runs; `never_tested` is not (25.0 % against
+25.0 %), so on this data an agent that edits without running anything is no less likely to
 pass, and the class describes process, not outcome. `edited_tests` is rare in both groups.
 These are associations in one dataset produced by one agent scaffold with three Llama-based
 models (360 of the 400 runs come from the 70B one), not causes, and resolved runs are a
@@ -356,22 +368,22 @@ trajlens analyze --format toolcalls oh-sample/row*.json --group-by exit_status
 | mean steps | 62.0 |
 | mean edits | 10.4 |
 | mean failed edits | 0.4 |
-| mean test runs | 13.3 |
+| mean test runs | 15.0 |
 | mean error rate | 0.093 |
 | mean first edit step (runs with an edit) | 24.8 |
 | mean first test step (runs with a test) | 7.9 |
-| runs testing after the last edit | 50 |
+| runs testing after the last edit | 56 |
 | runs submitted | 53 |
-| failed steps by tool class | 354: test 179, search 82, shell 48, edit 24, read 21 |
-| tool mix (share of steps) | edit 16.8%, test 21.4%, read 25.6%, search 14.8%, shell 14.5%, submit 1.4%, other 5.4% |
+| failed steps by tool class | 354: test 191, search 82, shell 36, edit 24, read 21 |
+| tool mix (share of steps) | edit 16.8%, test 24.3%, read 25.6%, search 14.8%, shell 11.6%, submit 1.4%, other 5.4% |
 
 Shell exit codes here are recorded by OpenHands and editor failures come from its `ERROR`
 replies; nothing is inferred from free text. This agent behaves very differently from the
 SWE-agent runs above: it runs a test at step 7.9 on average and edits only at step 24.8, and
-50 of the 60 runs test after their last edit. Class counts (runs carrying the class, resolved
-of 29 / unresolved of 31): looping 5 / 3, untested_final_edit 4 / 6, edited_tests 2 / 1,
-never_tested, gave_up, tool_error_cascade and empty_submission 0 / 0. On this sample no class
-separates resolved from unresolved runs.
+56 of the 60 runs test after their last edit. Class counts (runs carrying the class, resolved
+of 29 / unresolved of 31): looping 5 / 3, untested_final_edit 0 / 4, edited_tests 2 / 1,
+never_tested, gave_up, tool_error_cascade and empty_submission 0 / 0. Only
+untested_final_edit leans towards unresolved runs, and 4 runs are too few to read much into.
 
 Two rules do not transfer as they stand:
 
@@ -398,7 +410,7 @@ trajlens analyze swe-agent-trajectories/*.traj
 on the 22 `.traj` files under `trajectories/demonstrations/` and `tests/test_data/trajectories/`
 of github.com/SWE-agent/SWE-agent (9 of them capture-the-flag demonstrations, not code
 fixes): 22 runs, mean 10.5 steps, mean error rate 0.057 (inferred), findings looping 1,
-never_tested 9, context_blow_up 1, edited_tests 2, empty_submission 1, no finding 11. The two
+never_tested 5, context_blow_up 1, edited_tests 2, empty_submission 1, no finding 15. The two
 mini-swe-agent sample files under `tests/test_data/` of github.com/SWE-agent/mini-swe-agent
 parse to 10 and 2 steps; both are labelled empty_submission because they are plain message
 lists, a form that carries no submission field, so the patch is empty.
@@ -407,8 +419,9 @@ lists, a form that carries no submission field, so the patch is empty.
 
 - Tool classes come from action names and regular expressions over the command. A test run
   hidden inside a shell script, an editor under an unusual name, or a `python -c` one-liner
-  that exercises the fix is missed; `python reproduce.py` counts as a test even when the script
-  checks nothing.
+  that exercises the fix is missed, as is running the program the issue is about (`pylint` in
+  one audited run); `python reproduce.py`, or any script the agent wrote, counts as a test even
+  when it checks nothing.
 - Error inference reads observation text with a fixed list of patterns. A failing step that
   prints none of them is a success to trajlens, and a step that prints an old traceback it
   merely displayed (for example `cat`-ing a log) is a failure.
