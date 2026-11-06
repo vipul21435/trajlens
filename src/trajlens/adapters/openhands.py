@@ -15,7 +15,9 @@ or ``user``), ``message`` and either
 A file holding an object with an ``events`` or ``history`` list is accepted
 too. Only agent actions become steps; user messages and system events are
 skipped. The observation for a step is the event whose ``cause`` equals the
-action id, otherwise the next observation event in the stream.
+action id, otherwise the first observation without a ``cause`` that comes
+after the action and before the next action; an action with neither has an
+empty observation and no exit code.
 
 Token counts are read when present from ``llm_metrics.accumulated_token_usage``
 on the action (cumulative; per step values are the differences) or from
@@ -97,6 +99,21 @@ def _thought(name: str, args: dict, event: dict) -> str:
     return str(event.get("message") or "")
 
 
+def _next_free_observation(events: list[dict], pos: int) -> dict | None:
+    """The first observation after ``events[pos]`` that names no other action as its cause.
+
+    The scan stops at the next action, so an action never takes the output of
+    a later one.
+    """
+    own = events[pos].get("id")
+    for x in events[pos + 1 :]:
+        if isinstance(x.get("action"), str):
+            return None
+        if "observation" in x and (x.get("cause") is None or x.get("cause") == own):
+            return x
+    return None
+
+
 def parse_openhands(data, run_id: str) -> Trajectory:
     """Build a Trajectory from a parsed OpenHands event list."""
     patch = ""
@@ -119,10 +136,7 @@ def parse_openhands(data, run_id: str) -> Trajectory:
         if not isinstance(name, str) or e.get("source") == "user":
             continue
         args = e.get("args") if isinstance(e.get("args"), dict) else {}
-        obs = by_cause.get(e.get("id"))
-        if obs is None:
-            obs = next((x for x in events[pos + 1 :] if "observation" in x), None)
-        obs = obs or {}
+        obs = by_cause.get(e.get("id")) or _next_free_observation(events, pos) or {}
         extras = obs.get("extras") if isinstance(obs.get("extras"), dict) else {}
         tin, tout, cumulative = _usage(e)
         if cumulative and tin is not None:
