@@ -97,6 +97,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="count test files the patch creates as edited tests",
     )
     a.add_argument(
+        "--loop-any-observation",
+        action="store_true",
+        help="group repeated commands even when their observations differ",
+    )
+    a.add_argument(
         "--no-edit-reset",
         action="store_true",
         help="let repeats of a command span edits (count edit-test cycles as loops)",
@@ -196,6 +201,7 @@ def main(argv: list[str] | None = None) -> int:
             context_chars=args.context_chars,
             infer_errors=args.infer_errors,
             edit_resets=not args.no_edit_reset,
+            same_observation=not args.loop_any_observation,
             include_new_tests=args.include_new_tests,
         )
         report = analyze_paths(

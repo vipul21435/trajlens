@@ -114,3 +114,20 @@ def test_show_marks_evidence_and_errors(capsys):
     assert main(["show", str(FX / "good.jsonl")]) == 0
     assert "  no findings" in capsys.readouterr().out
     assert main(["show", "missing.jsonl"]) == 2
+
+
+def test_loop_flags_reach_the_metrics(tmp_path, capsys):
+    p = tmp_path / "page.jsonl"
+    rows = [
+        {"action": "scroll_down", "command": "scroll_down", "observation": str(k) * 300}
+        for k in range(5)
+    ]
+    p.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+
+    def labels(rep):
+        return [f["label"] for f in rep["runs"][0]["findings"]]
+
+    assert "looping" not in labels(analyze_paths([p]))
+    assert "looping" in labels(analyze_paths([p], opts=Options(same_observation=False)))
+    assert main(["analyze", str(p), "--loop-any-observation"]) == 0
+    assert "looping: exact repeat" in capsys.readouterr().out

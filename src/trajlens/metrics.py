@@ -197,7 +197,7 @@ def _collect(
     ids = [start]
     j = start + 1
     while j < len(commands) and j - ids[-1] < window:
-        if j not in skip and commands[j] and same(commands[start], commands[j]):
+        if j not in skip and commands[j] and same(start, j):
             ids.append(j)
         elif barriers is not None and barriers[j]:
             break
@@ -211,6 +211,8 @@ def find_loops(
     min_repeats: int = 3,
     near_threshold: float = 0.9,
     edit_resets: bool = True,
+    same_observation: bool = True,
+    observation_head: int = 300,
 ) -> tuple[list[Loop], list[Loop]]:
     """Find exact and near-duplicate command loops.
 
@@ -226,9 +228,23 @@ def find_loops(
     command that is not an edit ends the group: rerunning the same test after
     changing the code is the normal edit-test cycle, not a loop. Repeated
     edits are still gathered, since an edit that does not take is the loop.
+
+    With ``same_observation`` (the default) a repeated command joins a loop
+    only when the first ``observation_head`` characters of its observation
+    are also at least ``near_threshold`` similar to those of the group's
+    first step. Paging through a file with ``scroll_down``, or reading ten
+    different files under one long directory, repeats the command but brings
+    new information each time; the same edit rejected with the same error,
+    or the same search with the same empty result, does not.
     """
     commands = [normalise_command(s.command) if s.command else "" for s in steps]
     is_edit = [s.tool == EDIT for s in steps]
+    heads = [s.observation[:observation_head] for s in steps]
+
+    def same_obs(a: int, b: int) -> bool:
+        if not same_observation or heads[a] == heads[b]:
+            return True
+        return SequenceMatcher(None, heads[a], heads[b]).ratio() >= near_threshold
 
     def barriers_for(i: int) -> list[bool] | None:
         return None if not edit_resets or is_edit[i] else is_edit
@@ -238,12 +254,22 @@ def find_loops(
     for i, c in enumerate(commands):
         if not c or i in exact_steps:
             continue
-        ids = _collect(commands, i, window, exact_steps, lambda a, b: a == b, barriers_for(i))
+        ids = _collect(
+            commands,
+            i,
+            window,
+            exact_steps,
+            lambda a, b: commands[a] == commands[b] and same_obs(a, b),
+            barriers_for(i),
+        )
         if len(ids) >= min_repeats:
             exact.append(Loop("exact", steps[i].command.strip(), ids))
             exact_steps.update(ids)
 
-    near: list[Loop] = []
+    def near(a: int, b: int) -> bool:
+        return near_duplicate(commands[a], commands[b], near_threshold) and same_obs(a, b)
+
+    near_loops: list[Loop] = []
     near_steps: set[int] = set()
     skip = exact_steps | near_steps
     for i, c in enumerate(commands):
@@ -254,14 +280,14 @@ def find_loops(
             i,
             window,
             skip,
-            lambda a, b: near_duplicate(a, b, near_threshold),
+            near,
             barriers_for(i),
         )
         if len(ids) >= min_repeats:
-            near.append(Loop("near", steps[i].command.strip(), ids))
+            near_loops.append(Loop("near", steps[i].command.strip(), ids))
             near_steps.update(ids)
             skip = exact_steps | near_steps
-    return exact, near
+    return exact, near_loops
 
 
 def error_streaks(steps: list[Step], errors: list[bool] | None = None) -> list[list[int]]:
@@ -309,6 +335,7 @@ def run_metrics(
     near_threshold: float = 0.9,
     infer_errors: str = "auto",
     edit_resets: bool = True,
+    same_observation: bool = True,
 ) -> RunMetrics:
     """Compute every per-run metric for one trajectory.
 
@@ -322,7 +349,9 @@ def run_metrics(
     test_ids = [s.index for s in steps if s.tool == TEST]
     edits = len(edit_ids)
     test_runs = len(test_ids)
-    exact, near = find_loops(steps, window, min_repeats, near_threshold, edit_resets)
+    exact, near = find_loops(
+        steps, window, min_repeats, near_threshold, edit_resets, same_observation
+    )
     looped = {i for lp in exact + near for i in lp.step_ids}
     failed = step_errors(steps, infer_errors)
     errors = [s.index for s, f in zip(steps, failed, strict=True) if f]

@@ -211,3 +211,25 @@ def test_failed_edits_and_tests():
     )
     m = run_metrics(Trajectory("t", steps))
     assert (m.edits, m.failed_edits, m.test_runs, m.failed_test_runs) == (2, 1, 2, 1)
+
+
+def test_near_loop_needs_similar_observation():
+    cmds = [f"head /very/long/shared/prefix/of/a/path/module_{c}.py" for c in "abcd"]
+    distinct = mk(cmds, obs=["alpha " * 20, "beta " * 20, "gamma " * 20, "delta " * 20])
+    exact, near = find_loops(distinct, window=6, min_repeats=3, near_threshold=0.9)
+    assert exact == [] and near == []
+    _, near = find_loops(distinct, near_threshold=0.9, same_observation=False)
+    assert [lp.step_ids for lp in near] == [[0, 1, 2, 3]]
+    same = mk(cmds, obs=["No matches found"] * 4)
+    _, near = find_loops(same, near_threshold=0.9)
+    assert [lp.step_ids for lp in near] == [[0, 1, 2, 3]]
+
+
+def test_paging_is_not_a_loop():
+    pages = [f"[File: a.py (400 lines total)]\n({k * 100} more lines above)\n" + f"{k}" * 200
+             for k in range(1, 5)]  # fmt: skip
+    steps = mk(["scroll_down"] * 4, obs=pages, tools=["read"] * 4)
+    exact, _ = find_loops(steps)
+    assert exact == []
+    exact, _ = find_loops(steps, same_observation=False)
+    assert [lp.step_ids for lp in exact] == [[0, 1, 2, 3]]

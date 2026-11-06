@@ -33,6 +33,7 @@ class Options:
     include_new_tests: bool = False
     infer_errors: str = "auto"
     edit_resets: bool = True
+    same_observation: bool = True
 
 
 def step_rows(traj: Trajectory, infer_errors: str = "auto", head: int = 160) -> list[dict]:
@@ -64,7 +65,15 @@ def analyze_run(
     With ``steps`` the dict also holds :func:`step_rows` under ``steps``.
     """
     o = opts or Options()
-    m = run_metrics(traj, o.window, o.min_repeats, o.near_threshold, o.infer_errors, o.edit_resets)
+    m = run_metrics(
+        traj,
+        window=o.window,
+        min_repeats=o.min_repeats,
+        near_threshold=o.near_threshold,
+        infer_errors=o.infer_errors,
+        edit_resets=o.edit_resets,
+        same_observation=o.same_observation,
+    )
     findings = classify_run(
         traj,
         m,
