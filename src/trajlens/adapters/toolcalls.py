@@ -27,8 +27,10 @@ Tool names map to classes as follows:
   classified by name, usually ``other``.
 
 Exit codes: a shell observation ending in OpenHands' line
-``[Command finished with exit code N]`` gives ``N``; a shell observation
-without it has none. Any other tool's observation is a failure (exit code 1)
+``[Command finished with exit code N]`` gives ``N``; one ending in its
+timeout notice gives -1 and one ending in
+``[Error occurred in processing last action]`` gives 1; any other shell
+observation has none. Any other tool's observation is a failure (exit code 1)
 when it starts with ``ERROR`` and a success (0) otherwise.
 """
 
@@ -46,6 +48,7 @@ SHELL_TOOLS = ("execute_bash", "bash", "run", "shell", "terminal", "execute_ipyt
 EDITOR_TOOLS = ("str_replace_editor", "str_replace_based_edit_tool", "edit_file")
 SUBMIT_TOOLS = ("finish", "submit")
 _EXIT_RE = re.compile(r"\[Command finished with exit code (-?\d+)\]\s*$")
+_TIMEOUT_RE = re.compile(r"^\[The command (?:has no new output after|timed out after) ")
 
 
 def _args(call: dict) -> dict:
@@ -80,10 +83,25 @@ def describe_call(name: str, args: dict) -> tuple[str, str]:
 
 
 def exit_code_for(name: str, observation: str) -> int | None:
-    """Exit code of one tool call from its observation text."""
+    """Exit code of one tool call from its observation text.
+
+    A shell reply ending in OpenHands' timeout notice (``[The command has no
+    new output after N seconds ...]`` or ``[The command timed out after ...]``)
+    gets -1, and one ending in ``[Error occurred in processing last action]``
+    gets 1, so both count as failed steps.
+    """
     if name in SHELL_TOOLS:
-        m = _EXIT_RE.search(observation.rstrip())
-        return int(m.group(1)) if m else None
+        text = observation.rstrip()
+        m = _EXIT_RE.search(text)
+        if m:
+            return int(m.group(1))
+        lines = text.splitlines()
+        last = lines[-1].strip() if lines else ""
+        if _TIMEOUT_RE.match(last):
+            return -1
+        if last == "[Error occurred in processing last action]":
+            return 1
+        return None
     return 1 if observation.lstrip().startswith("ERROR") else 0
 
 

@@ -146,7 +146,7 @@ stays `None`.
 | `minisweagent` | mini-swe-agent `.traj.json` (message list, or object with `messages` and `info`); exit code from `<returncode>` | `*.traj.json`, or role/content message lists |
 | `openhands` | OpenHands event list (`action`/`observation` events linked by `cause`), exit code from `extras.exit_code`, ISO timestamps, cumulative token usage turned into per-step counts | a JSON list of events, or an object with `events` |
 | `chat` | a model transcript: messages with `role` (`assistant`/`ai` for the agent, `user`/`tool` for observations) and `content` or `text`; the command is the last fenced block of each agent turn, as SWE-agent's thought-action parser takes it | an object whose `trajectory` is a list of `role` messages with no `action` and no `tool_calls`; a bare message list is read as mini-swe-agent, so pass `--format chat` for it |
-| `toolcalls` | a function-calling transcript: `assistant` messages with `tool_calls` (`function.name`, `function.arguments`), `tool` replies matched by `tool_call_id`; one step per call; shell exit code from OpenHands' `[Command finished with exit code N]` line, editor replies starting with `ERROR` count as failures | a message list, or an object whose `trajectory` is one, where some message has `tool_calls` |
+| `toolcalls` | a function-calling transcript: `assistant` messages with `tool_calls` (`function.name`, `function.arguments`), `tool` replies matched by `tool_call_id`; one step per call; shell exit code from OpenHands' `[Command finished with exit code N]` line (-1 for its timeout notice, 1 for `[Error occurred in processing last action]`), editor replies starting with `ERROR` count as failures | a message list, or an object whose `trajectory` is one, where some message has `tool_calls` |
 
 Generic JSONL: one step per line with any of `thought`, `action`, `command`, `observation`,
 `exit_code`, `timestamp` (epoch seconds), `tokens_in`, `tokens_out`, and optionally `tool`
@@ -437,7 +437,7 @@ trajlens analyze --format toolcalls oh-sample/row*.json --group-by exit_status
 | mean edits | 10.4 |
 | mean failed edits | 0.4 |
 | mean test runs | 15.0 |
-| mean error rate | 0.093 |
+| mean error rate | 0.096 |
 | mean first edit step (runs with an edit) | 24.8 |
 | mean first test step (runs with a test) | 8.3 |
 | runs with a loop | 20 |
@@ -445,7 +445,7 @@ trajlens analyze --format toolcalls oh-sample/row*.json --group-by exit_status
 | runs submitted | 53 |
 | runs with an empty patch | 0 |
 | runs with no finding | 0 |
-| failed steps by tool class | 354: test 192, search 82, shell 35, edit 24, read 21 |
+| failed steps by tool class | 368: test 197, search 82, shell 44, edit 24, read 21 |
 | tool mix (share of steps) | edit 16.8%, test 24.2%, read 25.6%, search 14.8%, shell 11.7%, submit 1.4%, other 5.4% |
 
 Shell exit codes here are recorded by OpenHands and editor failures come from its `ERROR`

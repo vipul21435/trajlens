@@ -87,3 +87,16 @@ def test_load_and_errors(tmp_path):
     assert t.run_id == "r" and t.steps[0].command == "" and t.resolved is None
     with pytest.raises(ValueError):
         parse_toolcalls({"x": 1}, "r")
+
+
+def test_timeout_and_processing_error_notices_are_failures():
+    from trajlens.adapters.toolcalls import exit_code_for
+
+    wait = "partial\n[The command has no new output after 30 seconds. You may wait longer ...]"
+    timed = "[The command timed out after 300.0 seconds. You may wait longer to see output]"
+    broken = "x\n[Error occurred in processing last action]"
+    assert exit_code_for("execute_bash", wait) == -1
+    assert exit_code_for("execute_bash", timed) == -1
+    assert exit_code_for("execute_bash", broken) == 1
+    assert exit_code_for("execute_bash", "ok\n[Command finished with exit code 0]") == 0
+    assert exit_code_for("execute_bash", "no marker") is None
