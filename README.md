@@ -273,7 +273,8 @@ Data: 400 runs drawn from
 [nebius/SWE-agent-trajectories](https://huggingface.co/datasets/nebius/SWE-agent-trajectories)
 (80,036 SWE-agent runs on GitHub issues, with the final patch, the framework's exit status,
 and whether the task's tests passed on the patch; licence CC BY 4.0, checked on the dataset
-page). The sample is 100 random offsets with seed 0, four consecutive rows each, read through
+page, which also asks that the Llama-generated outputs be used under the Llama 3.1 licence and
+that the licence of each source repository be respected). The sample is 100 random offsets with seed 0, four consecutive rows each, read through
 the public datasets-server rows endpoint; the test log column is dropped. 76 of the 400 runs
 are resolved. No row is committed to this repository; the script downloads them (26 MB).
 The 100 rows with the lowest offsets are the ones the defaults were looked at on ("tuning");
