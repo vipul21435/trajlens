@@ -93,6 +93,49 @@ class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
         return super()._get_help_string(action) or ""
 
 
+def _int_at_least(low: int):
+    """An argparse type: an integer no smaller than ``low``."""
+
+    def parse(text: str) -> int:
+        try:
+            value = int(text)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"not an integer: {text!r}") from None
+        if value < low:
+            raise argparse.ArgumentTypeError(f"must be at least {low}, got {value}")
+        return value
+
+    return parse
+
+
+def _ratio(text: str) -> float:
+    """An argparse type: a number from 0 to 1."""
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a number: {text!r}") from None
+    if not 0.0 <= value <= 1.0:
+        raise argparse.ArgumentTypeError(f"must be between 0 and 1, got {value}")
+    return value
+
+
+_POSITIVE = _int_at_least(1)
+_AT_LEAST_TWO = _int_at_least(2)
+
+
+def parse_fail_on(text: str | None) -> set[str]:
+    """Class names from a --fail-on value (comma-separated, spaces ignored, ``any`` for all)."""
+    if not text:
+        return set()
+    names = {part.strip() for part in text.split(",") if part.strip()}
+    if names == {"any"}:
+        return set(FAILURE_CLASSES)
+    unknown = names - set(FAILURE_CLASSES)
+    if unknown:
+        raise ValueError(f"unknown class {', '.join(sorted(unknown))}")
+    return names
+
+
 DESCRIPTION = "Read coding-agent trajectories, measure behaviour, classify failures."
 FORMAT_HELP = "input format; auto detects it from the file"
 
@@ -127,14 +170,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="leave out files that cannot be read, list them on stderr, and go on",
     )
     a.add_argument("--group-by", choices=GROUP_KEYS, help="also count findings per value of this")
-    a.add_argument("--window", type=int, default=6, help="loop window in steps")
-    a.add_argument("--min-repeats", type=int, default=3, help="repeats that make a loop")
-    a.add_argument("--near-threshold", type=float, default=0.9, help="near-duplicate ratio")
-    a.add_argument("--loop-min-steps", type=int, default=4, help="loop size that is a failure")
-    a.add_argument("--cascade-min", type=int, default=4, help="error streak that is a cascade")
-    a.add_argument("--blowup-chars", type=int, default=20000, help="observation size for blow-up")
+    a.add_argument("--window", type=_POSITIVE, default=6, help="loop window in steps")
+    a.add_argument("--min-repeats", type=_AT_LEAST_TWO, default=3, help="repeats that make a loop")
+    a.add_argument("--near-threshold", type=_ratio, default=0.9, help="near-duplicate ratio")
     a.add_argument(
-        "--context-chars", type=int, default=60000, help="total observation size for blow-up"
+        "--loop-min-steps", type=_AT_LEAST_TWO, default=4, help="loop size that is a failure"
+    )
+    a.add_argument(
+        "--cascade-min", type=_POSITIVE, default=4, help="error streak that is a cascade"
+    )
+    a.add_argument(
+        "--blowup-chars", type=_POSITIVE, default=20000, help="observation size for blow-up"
+    )
+    a.add_argument(
+        "--context-chars", type=_POSITIVE, default=60000, help="total observation size for blow-up"
     )
     a.add_argument(
         "--include-new-tests",
@@ -165,14 +214,18 @@ def build_parser() -> argparse.ArgumentParser:
     s = add("show", "print one run step by step with its findings")
     s.add_argument("path", type=Path, help="one trajectory file")
     s.add_argument("--format", default="auto", choices=("auto", *FORMATS), help=FORMAT_HELP)
-    s.add_argument("--width", type=int, default=100, help="cut each line to this many characters")
+    s.add_argument(
+        "--width", type=_POSITIVE, default=100, help="cut each line to this many characters"
+    )
     au = add("audit", "print a seeded random sample of runs carrying one class, for reading")
     au.add_argument("paths", nargs="+", type=Path, help="trajectory files")
     au.add_argument("--label", required=True, choices=FAILURE_CLASSES, help="class to sample")
-    au.add_argument("--n", type=int, default=20, help="runs to draw")
+    au.add_argument("--n", type=_int_at_least(0), default=20, help="runs to draw")
     au.add_argument("--seed", type=int, default=0, help="seed of the random draw")
     au.add_argument("--format", default="auto", choices=("auto", *FORMATS), help=FORMAT_HELP)
-    au.add_argument("--width", type=int, default=100, help="cut each line to this many characters")
+    au.add_argument(
+        "--width", type=_POSITIVE, default=100, help="cut each line to this many characters"
+    )
     au.add_argument("--no-script-tests", action="store_true", help="as for analyze")
     cmp_ = add("compare", "compare class shares of two --json reports")
     cmp_.add_argument("a", type=Path, help="first report (from analyze --json)")
@@ -298,6 +351,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote {len(written)} files to {args.out}")
         return 0
     try:
+        wanted = parse_fail_on(args.fail_on)
         opts = Options(
             window=args.window,
             min_repeats=args.min_repeats,
@@ -320,24 +374,20 @@ def main(argv: list[str] | None = None) -> int:
             group_by=args.group_by,
             skip_bad=args.skip_bad,
         )
+        if args.json:
+            text = json.dumps(report, indent=2, allow_nan=False) + "\n"
+            args.json.write_text(text, encoding="utf-8")
+        if args.html:
+            args.html.write_text(render_html(report, args.title), encoding="utf-8")
+        if args.csv:
+            write_csv(report, args.csv)
     except (OSError, ValueError) as exc:
         print(f"trajlens: {exc}", file=sys.stderr)
         return 2
-    if args.json:
-        args.json.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n", encoding="utf-8")
-    if args.html:
-        args.html.write_text(render_html(report, args.title), encoding="utf-8")
-    if args.csv:
-        write_csv(report, args.csv)
     for bad in report.get("skipped", []):
         print(f"trajlens: skipped {bad['error']}", file=sys.stderr)
     print(format_text(report))
-    if args.fail_on:
-        wanted = set(FAILURE_CLASSES) if args.fail_on == "any" else set(args.fail_on.split(","))
-        unknown = wanted - set(FAILURE_CLASSES)
-        if unknown:
-            print(f"trajlens: unknown class {', '.join(sorted(unknown))}", file=sys.stderr)
-            return 2
+    if wanted:
         hits = [
             r["metrics"]["run_id"]
             for r in report["runs"]
