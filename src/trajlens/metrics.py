@@ -183,6 +183,58 @@ def is_test_path(path: str) -> bool:
     return bool(_TEST_PATH_RE.search(path))
 
 
+_OPEN_WORDS = ("open", "create")
+_LINE_EDIT_WORDS = ("edit", "insert")
+
+
+def _path_tokens(command: str) -> list[str]:
+    """Whitespace tokens of the command's first line, with quotes and
+    redirection marks stripped."""
+    lines = command.strip().splitlines()
+    first = lines[0] if lines else ""
+    out = []
+    for tok in first.split():
+        tok = tok.strip("'\"`;,()").lstrip("<>")
+        tok = tok.strip("'\"")
+        if tok:
+            out.append(tok)
+    return out
+
+
+def _same_file(token: str, path: str) -> bool:
+    """True when ``token`` names ``path`` (a repo-relative patch path),
+    either exactly or as an absolute path ending in it."""
+    return token == path or token.endswith("/" + path)
+
+
+def edit_steps_for(steps: list[Step], paths: list[str]) -> list[int]:
+    """Ids of edit steps whose target is one of ``paths``.
+
+    The target is read from the command: a path argument (``str_replace
+    /repo/tests/test_x.py``, ``sed -i ... tests/test_x.py``, ``cat >
+    tests/test_x.py``). Line-range editors that name no file
+    (SWE-agent's ``edit 10:12``) act on the file opened last with ``open``
+    or ``create``, so that file is tracked across steps.
+    """
+    if not paths:
+        return []
+    current = ""
+    out: list[int] = []
+    for step in steps:
+        toks = _path_tokens(step.command)
+        word = toks[0] if toks else ""
+        if word in _OPEN_WORDS and len(toks) > 1:
+            current = toks[1]
+        if step.tool != EDIT:
+            continue
+        named = [t for t in toks if "/" in t or "." in t]
+        if not named and word in _LINE_EDIT_WORDS:
+            named = [current] if current else []
+        if any(_same_file(t, p) for t in named for p in paths):
+            out.append(step.index)
+    return out
+
+
 def _collect(
     commands: list[str],
     start: int,

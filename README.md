@@ -226,7 +226,7 @@ Each class is a rule over the metrics; a run can carry several. Defaults in brac
 | gave_up | no submit step, and an empty patch or a failed last step | the last step |
 | tool_error_cascade | at least `--cascade-min` [4] consecutive failed steps | the streak |
 | context_blow_up | observations reach `--context-chars` [60000] characters in total, or one observation has at least `--blowup-chars` [20000] | the step where the total crosses the limit; the largest observation |
-| edited_tests | the final patch modifies or deletes a test file that existed before the run (created test files count only with `--include-new-tests`) | none; the files are named in the detail |
+| edited_tests | the final patch modifies or deletes a test file that existed before the run (created test files count only with `--include-new-tests`) | the edit steps aimed at those files: a path argument, or for line-range editors such as SWE-agent's `edit 10:12` the file last opened; none when no edit step names the file (one written by a script, say); the files are named in the detail |
 | empty_submission | a submit step and an empty patch | the submit steps |
 
 Why these rules: `never_tested`, `untested_final_edit` and `edited_tests` follow the SWE-bench

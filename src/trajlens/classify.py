@@ -26,8 +26,11 @@ context_blow_up     the observations together reach ``context_chars`` [60000]
 edited_tests        the final patch modifies or deletes a test file that existed
                     before the run; a test file the patch creates (a new test
                     or a reproduction script named test_*.py) does not count
-                    unless ``include_new_tests`` is set; evidence: none (patch
-                    level), the file names are listed in the detail
+                    unless ``include_new_tests`` is set; evidence: the edit
+                    steps aimed at those files (a path argument, or the file
+                    last opened for line-range editors), none when no edit
+                    step names the file; the file names are listed in the
+                    detail
 empty_submission    the run submitted and the patch is empty; evidence: the
                     submit step
 """
@@ -36,7 +39,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 
-from trajlens.metrics import RunMetrics
+from trajlens.metrics import RunMetrics, edit_steps_for
 from trajlens.model import SUBMIT, Trajectory
 
 FAILURE_CLASSES = (
@@ -164,7 +167,13 @@ def classify_run(
         p for p in m.patch_test_files if include_new_tests or p not in m.patch_new_test_files
     ]
     if touched:
-        out.append(Finding("edited_tests", "patch touches " + ", ".join(touched), []))
+        out.append(
+            Finding(
+                "edited_tests",
+                "patch touches " + ", ".join(touched),
+                edit_steps_for(steps, touched),
+            )
+        )
 
     if m.submitted and m.patch_empty:
         submit_ids = [s.index for s in steps if s.tool == SUBMIT]

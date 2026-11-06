@@ -33,7 +33,7 @@ def test_edited_tests_and_blow_up():
     assert set(f) == {"context_blow_up", "edited_tests"}
     assert f["context_blow_up"].step_ids == [3]
     assert "tests/test_parse.py" in f["edited_tests"].detail
-    assert f["edited_tests"].step_ids == []
+    assert f["edited_tests"].step_ids == [2]
     # raise the floor and the blow-up disappears
     f2 = labels("edited_tests.jsonl", blowup_chars=10**6)
     assert set(f2) == {"edited_tests"}
@@ -143,3 +143,25 @@ def test_edited_tests_ignores_created_files():
     assert "edited_tests" not in {x.label for x in classify_run(t2, run_metrics(t2))}
     labels2 = {x.label for x in classify_run(t2, run_metrics(t2), include_new_tests=True)}
     assert "edited_tests" in labels2
+
+
+def test_edited_tests_evidence_follows_edit_targets():
+    from trajlens.metrics import edit_steps_for
+
+    steps = [
+        Step(index=0, tool="read", command="open tests/test_old.py"),
+        Step(index=1, tool="edit", command="edit 3:4\nassert f() == 2\nend_of_edit"),
+        Step(index=2, tool="read", command='open "src/calc.py"'),
+        Step(index=3, tool="edit", command="edit 1:1\nx = 1\nend_of_edit"),
+        Step(index=4, tool="edit", command="str_replace /repo/tests/test_old.py"),
+        Step(index=5, tool="edit", command="sed -i 's/1/2/' tests/test_old.py"),
+        Step(index=6, tool="edit", command="cat > /repo/tests/test_old.py <<EOF"),
+        Step(index=7, tool="edit", command="edit 2:2"),
+        Step(index=8, tool="submit", command="submit"),
+    ]
+    assert edit_steps_for(steps, ["tests/test_old.py"]) == [1, 4, 5, 6]
+    assert edit_steps_for(steps, ["src/calc.py"]) == [3, 7]
+    assert edit_steps_for(steps, []) == []
+    t = Trajectory("t", steps, patch=NEW_AND_OLD)
+    f = {x.label: x for x in classify_run(t, run_metrics(t))}
+    assert f["edited_tests"].step_ids == [1, 4, 5, 6]
