@@ -57,11 +57,14 @@ def _num(value, spec: str = ".1f") -> str:
     return "-" if value is None else format(value, spec)
 
 
-def metrics_table(a: dict) -> list[str]:
+def metrics_table(a: dict, runs: list[dict]) -> list[str]:
+    n = len(runs) or 1
+    failed_edits = sum(r["metrics"]["failed_edits"] for r in runs) / n
     rows = [
         ("runs", a["runs"]),
         ("mean steps", _num(a["mean_steps"])),
         ("mean edits", _num(a["mean_edits"])),
+        ("mean failed edits (inferred)", _num(failed_edits)),
         ("mean test runs", _num(a["mean_test_runs"])),
         ("mean error rate (inferred)", _num(a["mean_error_rate"], ".3f")),
         ("mean first edit step (runs with an edit)", _num(a["mean_first_edit_step"])),
@@ -148,7 +151,7 @@ def main() -> None:
         f"seed {manifest['seed']}); tuning rows {len(tuning)}, held-out rows {len(held)}.\n"
     )
     print("All rows, default options:\n")
-    print("\n".join(metrics_table(aggregate(runs))) + "\n")
+    print("\n".join(metrics_table(aggregate(runs), runs)) + "\n")
     print("Failure classes by outcome, all rows (95 % Wilson intervals):\n")
     print("\n".join(class_table(runs)) + "\n")
     print("Failure classes by outcome, held-out rows only:\n")
