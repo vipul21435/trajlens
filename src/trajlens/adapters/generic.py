@@ -62,6 +62,7 @@ _EDIT_RE = re.compile(
 )
 _READ_RE = re.compile(r"^\s*(open|view|cat|head|tail|less|read|read_file|goto|scroll_(up|down))\b")
 _SEARCH_RE = re.compile(r"^\s*(grep|rg|ag|find|search|search_dir|search_file|find_file|ls|fd)\b")
+_CD_PREFIX_RE = re.compile(r"^\s*cd\s+(\"[^\"]*\"|'[^']*'|\S+)\s*(&&|;)\s*")
 _SUBMIT_RE = re.compile(r"^\s*(submit|finish|exit|done)\b")
 
 _ACTION_CLASS = {
@@ -106,6 +107,9 @@ def classify_tool(action: str, command: str) -> str:
     if known is not None and known != SHELL:
         return known
     text = cmd if cmd else name
+    # "cd /repo && grep ..." is a grep: drop leading directory changes.
+    while _CD_PREFIX_RE.match(text):
+        text = _CD_PREFIX_RE.sub("", text, count=1)
     if _TEST_RE.search(text) or _SCRIPT_TEST_RE.search(text):
         return TEST
     if _EDIT_RE.match(text):
