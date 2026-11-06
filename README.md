@@ -85,7 +85,9 @@ Other outputs and switches: `--csv runs.csv` writes one row per run (scalar metr
 `source_format`, `exit_status`, `task_id`) repeats the class counts per group, in the text
 output and in the HTML report; `--fail-on looping,edited_tests` (or `any`) makes the command
 exit with status 1 when any run carries one of the named classes, so a batch of agent runs can
-gate a CI job. `trajlens convert RUN... --out DIR` rewrites any supported input as generic
+gate a CI job. A file that cannot be read stops the command with a one-line message naming
+the file; `--skip-bad` lists such files on stderr (and under `skipped` in the JSON) and goes
+on with the rest. `trajlens convert RUN... --out DIR` rewrites any supported input as generic
 JSONL.
 
 The example script analyses every fixture and writes both reports:

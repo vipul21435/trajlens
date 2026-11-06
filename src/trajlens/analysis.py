@@ -121,10 +121,29 @@ def analyze_paths(
     opts: Options | None = None,
     steps: bool = False,
     group_by: str | None = None,
+    skip_bad: bool = False,
 ) -> dict:
-    """Load every file in ``fmt`` (or detect it) and analyse it."""
-    runs = [analyze_run(load(p, fmt), opts, str(p), steps) for p in paths]
-    return {"version": __version__, "runs": runs, "aggregate": aggregate(runs, group_by)}
+    """Load every file in ``fmt`` (or detect it) and analyse it.
+
+    A file that cannot be read raises ValueError (or OSError) naming it. With
+    ``skip_bad`` it is left out instead and listed with its message under
+    ``skipped`` in the report.
+    """
+    runs = []
+    skipped: list[dict] = []
+    for p in paths:
+        try:
+            traj = load(p, fmt)
+        except (OSError, ValueError) as exc:
+            if not skip_bad:
+                raise
+            skipped.append({"path": str(p), "error": str(exc)})
+            continue
+        runs.append(analyze_run(traj, opts, str(p), steps))
+    report = {"version": __version__, "runs": runs, "aggregate": aggregate(runs, group_by)}
+    if skip_bad:
+        report["skipped"] = skipped
+    return report
 
 
 def _mean(values: list[float]) -> float | None:

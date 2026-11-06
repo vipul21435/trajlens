@@ -33,13 +33,13 @@ from trajlens.adapters.generic import _opt_int, classify_tool
 from trajlens.model import Step, Trajectory
 
 
-def _split_action(action: str) -> tuple[str, str]:
-    text = (action or "").strip()
+def _split_action(action: object) -> tuple[str, str]:
+    text = "" if action is None else str(action).strip()
     name = text.split(None, 1)[0] if text else ""
     return name, text
 
 
-def _step(index: int, action: str, observation: str, thought: str, stamp: float | None) -> Step:
+def _step(index: int, action: object, observation: str, thought: str, stamp: float | None) -> Step:
     name, command = _split_action(action)
     return Step(
         index=index,
@@ -85,15 +85,16 @@ def _steps_from_history(history: list) -> list[Step]:
         untyped_action = kind is None and msg.get("role") == "assistant" and "action" in msg
         if kind == "action" or untyped_action:
             if pending is not None:
-                steps.append(_step(len(steps), pending["action"], "", pending.get("thought"), None))
+                action = pending.get("action", "")
+                steps.append(_step(len(steps), action, "", pending.get("thought"), None))
             pending = msg
         elif kind == "observation" and pending is not None:
             content = msg.get("content", "")
             thought = pending.get("thought")
-            steps.append(_step(len(steps), pending["action"], content, thought, None))
+            steps.append(_step(len(steps), pending.get("action", ""), content, thought, None))
             pending = None
     if pending is not None:
-        steps.append(_step(len(steps), pending["action"], "", pending.get("thought"), None))
+        steps.append(_step(len(steps), pending.get("action", ""), "", pending.get("thought"), None))
     return steps
 
 

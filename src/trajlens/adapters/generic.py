@@ -27,6 +27,7 @@ The ``action`` string is classified into a tool class by :func:`classify_tool`.
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 
@@ -177,22 +178,25 @@ def classify_tool(action: str, command: str) -> str:
     return OTHER
 
 
-def _opt_int(value) -> int | None:
+def _opt_int(value: object) -> int | None:
+    """``int(value)``, or None when it is missing or not a finite number."""
     if value is None:
         return None
     try:
-        return int(value)
-    except (TypeError, ValueError):
+        return int(value)  # type: ignore[call-overload]
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
-def _opt_float(value) -> float | None:
+def _opt_float(value: object) -> float | None:
+    """``float(value)``, or None when it is missing, not a number, NaN or infinite."""
     if value is None:
         return None
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        out = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError, OverflowError):
         return None
+    return out if math.isfinite(out) else None
 
 
 def step_from_record(index: int, rec: dict) -> Step:

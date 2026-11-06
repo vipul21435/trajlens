@@ -99,6 +99,11 @@ def _thought(name: str, args: dict, event: dict) -> str:
     return str(event.get("message") or "")
 
 
+def _is_key(value: object) -> bool:
+    """Event ids and causes are ints or strings; anything else links nothing."""
+    return isinstance(value, int | str) and not isinstance(value, bool)
+
+
 def _next_free_observation(events: list[dict], pos: int) -> dict | None:
     """The first observation after ``events[pos]`` that names no other action as its cause.
 
@@ -126,8 +131,9 @@ def parse_openhands(data, run_id: str) -> Trajectory:
     events = [e for e in events if isinstance(e, dict)]
     by_cause: dict = {}
     for e in events:
-        if "observation" in e and e.get("cause") is not None and e["cause"] not in by_cause:
-            by_cause[e["cause"]] = e
+        cause = e.get("cause")
+        if "observation" in e and _is_key(cause) and cause not in by_cause:
+            by_cause[cause] = e
     traj = Trajectory(run_id=run_id, source_format="openhands")
     traj.patch = patch
     prev_in = prev_out = None
@@ -136,7 +142,9 @@ def parse_openhands(data, run_id: str) -> Trajectory:
         if not isinstance(name, str) or e.get("source") == "user":
             continue
         args = e.get("args") if isinstance(e.get("args"), dict) else {}
-        obs = by_cause.get(e.get("id")) or _next_free_observation(events, pos) or {}
+        own = e.get("id")
+        obs = (by_cause.get(own) if _is_key(own) else None) or _next_free_observation(events, pos)
+        obs = obs or {}
         extras = obs.get("extras") if isinstance(obs.get("extras"), dict) else {}
         tin, tout, cumulative = _usage(e)
         if cumulative and tin is not None:

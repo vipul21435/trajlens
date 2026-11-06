@@ -117,6 +117,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="exit with status 1 when any run carries one of these comma-separated classes "
         "('any' for every class)",
     )
+    a.add_argument(
+        "--skip-bad",
+        action="store_true",
+        help="leave out files that cannot be read, list them on stderr, and go on",
+    )
     a.add_argument("--group-by", choices=GROUP_KEYS, help="also count findings per value of this")
     a.add_argument("--window", type=int, default=6, help="loop window in steps")
     a.add_argument("--min-repeats", type=int, default=3, help="repeats that make a loop")
@@ -303,7 +308,12 @@ def main(argv: list[str] | None = None) -> int:
             include_new_tests=args.include_new_tests,
         )
         report = analyze_paths(
-            args.paths, args.format, opts, steps=args.html is not None, group_by=args.group_by
+            args.paths,
+            args.format,
+            opts,
+            steps=args.html is not None,
+            group_by=args.group_by,
+            skip_bad=args.skip_bad,
         )
     except (OSError, ValueError) as exc:
         print(f"trajlens: {exc}", file=sys.stderr)
@@ -314,6 +324,8 @@ def main(argv: list[str] | None = None) -> int:
         args.html.write_text(render_html(report, args.title), encoding="utf-8")
     if args.csv:
         write_csv(report, args.csv)
+    for bad in report.get("skipped", []):
+        print(f"trajlens: skipped {bad['error']}", file=sys.stderr)
     print(format_text(report))
     if args.fail_on:
         wanted = set(FAILURE_CLASSES) if args.fail_on == "any" else set(args.fail_on.split(","))

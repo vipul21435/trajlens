@@ -52,17 +52,22 @@ def newcombe_diff(ka: int, na: int, kb: int, nb: int, z: float = Z95) -> tuple[f
     return d, max(-1.0, lower), min(1.0, upper)
 
 
-def _counts(report: dict) -> tuple[int, dict[str, int]]:
-    runs = report["runs"]
+def _counts(report: object) -> tuple[int, dict[str, int]]:
+    runs = report.get("runs") if isinstance(report, dict) else None
+    ok = isinstance(runs, list) and all(
+        isinstance(r, dict) and isinstance(r.get("findings"), list) for r in runs
+    )
+    if not ok:
+        raise ValueError("not a trajlens report: expected 'runs', a list of runs with 'findings'")
     counts = {lab: 0 for lab in FAILURE_CLASSES}
     for r in runs:
-        for lab in {f["label"] for f in r["findings"]}:
+        for lab in {f.get("label") for f in r["findings"] if isinstance(f, dict)}:
             if lab in counts:
                 counts[lab] += 1
     return len(runs), counts
 
 
-def compare_reports(a: dict, b: dict) -> list[dict]:
+def compare_reports(a: object, b: object) -> list[dict]:
     """One row per class: counts, shares, and B - A with its interval."""
     na, ca = _counts(a)
     nb, cb = _counts(b)

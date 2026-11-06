@@ -105,17 +105,36 @@ def detect_format(path: str | Path) -> str:
             data = json.load(fh)
         except json.JSONDecodeError as exc:
             raise ValueError(f"{path}: not valid JSON: {exc}") from exc
-    return detect_json(data)
+    try:
+        return detect_json(data)
+    except ValueError as exc:
+        raise ValueError(f"{path}: {exc}") from exc
 
 
 def load(path: str | Path, fmt: str = "auto") -> Trajectory:
-    """Load one trajectory file in the named format, or detect the format."""
+    """Load one trajectory file in the named format, or detect the format.
+
+    Any problem with the file's contents is raised as ValueError whose message
+    starts with the path; a missing or unreadable file raises OSError.
+    """
     if fmt == "auto":
-        fmt = detect_format(path)
+        try:
+            fmt = detect_format(path)
+        except UnicodeDecodeError as exc:
+            raise ValueError(f"{path}: not UTF-8 text: {exc}") from exc
     loader = _LOADERS.get(fmt)
     if loader is None:
         raise ValueError(f"unknown format {fmt!r}; known: {', '.join(FORMATS)}")
-    return loader(path)
+    try:
+        return loader(path)
+    except OSError:
+        raise
+    except (ValueError, TypeError, KeyError, AttributeError, OverflowError, RecursionError) as exc:
+        text = str(exc)
+        if text.startswith(str(path)):
+            raise
+        kind = "" if type(exc) in (ValueError, json.JSONDecodeError) else f"{type(exc).__name__}: "
+        raise ValueError(f"{path}: {kind}{text}") from exc
 
 
 __all__ = [
