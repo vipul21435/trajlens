@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from trajlens.analysis import Options, analyze_trajectories
 from trajlens.cli import aggregate, analyze_paths, main
 from trajlens.model import Step, Trajectory
@@ -170,3 +172,14 @@ def test_audit_draws_seeded_sample(capsys):
     args = ["audit", *paths, "--label", "never_tested", "--no-script-tests"]
     assert main(args) == 0
     assert "carry never_tested" in capsys.readouterr().out
+
+
+def test_help_shows_description_and_defaults(capsys):
+    with pytest.raises(SystemExit):
+        main(["--help"])
+    assert "classify failures" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        main(["analyze", "--help"])
+    out = capsys.readouterr().out
+    assert "(default: 60000)" in out and "trajectory files" in out
+    assert "(default: None)" not in out and "(default: False)" not in out

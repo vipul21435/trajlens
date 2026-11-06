@@ -81,13 +81,30 @@ def format_text(report: dict) -> str:
     return "\n".join(lines)
 
 
+class _HelpFormatter(argparse.ArgumentDefaultsHelpFormatter):
+    """Show "(default: X)" only where there is a default worth reading."""
+
+    def _get_help_string(self, action: argparse.Action) -> str:
+        if action.default in (None, False) or action.default is argparse.SUPPRESS:
+            return action.help or ""
+        return super()._get_help_string(action) or ""
+
+
+DESCRIPTION = "Read coding-agent trajectories, measure behaviour, classify failures."
+FORMAT_HELP = "input format; auto detects it from the file"
+
+
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="trajlens", description=__doc__.strip().splitlines()[0])
+    p = argparse.ArgumentParser(prog="trajlens", description=DESCRIPTION)
     p.add_argument("--version", action="version", version=f"trajlens {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
-    a = sub.add_parser("analyze", help="measure and classify trajectory files")
-    a.add_argument("paths", nargs="+", type=Path)
-    a.add_argument("--format", default="auto", choices=("auto", *FORMATS))
+
+    def add(name: str, help: str) -> argparse.ArgumentParser:
+        return sub.add_parser(name, help=help, description=help, formatter_class=_HelpFormatter)
+
+    a = add("analyze", "measure and classify trajectory files")
+    a.add_argument("paths", nargs="+", type=Path, help="trajectory files")
+    a.add_argument("--format", default="auto", choices=("auto", *FORMATS), help=FORMAT_HELP)
     a.add_argument("--json", type=Path, help="write the full report as JSON here")
     a.add_argument(
         "--html", type=Path, help="write a self-contained HTML report here (adds step rows)"
@@ -136,27 +153,31 @@ def build_parser() -> argparse.ArgumentParser:
         choices=INFER_MODES,
         help="read failures from observation text when a step has no exit code",
     )
-    s = sub.add_parser("show", help="print one run step by step with its findings")
-    s.add_argument("path", type=Path)
-    s.add_argument("--format", default="auto", choices=("auto", *FORMATS))
+    s = add("show", "print one run step by step with its findings")
+    s.add_argument("path", type=Path, help="one trajectory file")
+    s.add_argument("--format", default="auto", choices=("auto", *FORMATS), help=FORMAT_HELP)
     s.add_argument("--width", type=int, default=100, help="cut each line to this many characters")
-    au = sub.add_parser(
-        "audit", help="print a seeded random sample of runs carrying one class, for reading"
-    )
-    au.add_argument("paths", nargs="+", type=Path)
-    au.add_argument("--label", required=True, choices=FAILURE_CLASSES)
+    au = add("audit", "print a seeded random sample of runs carrying one class, for reading")
+    au.add_argument("paths", nargs="+", type=Path, help="trajectory files")
+    au.add_argument("--label", required=True, choices=FAILURE_CLASSES, help="class to sample")
     au.add_argument("--n", type=int, default=20, help="runs to draw")
-    au.add_argument("--seed", type=int, default=0)
-    au.add_argument("--format", default="auto", choices=("auto", *FORMATS))
-    au.add_argument("--width", type=int, default=100)
+    au.add_argument("--seed", type=int, default=0, help="seed of the random draw")
+    au.add_argument("--format", default="auto", choices=("auto", *FORMATS), help=FORMAT_HELP)
+    au.add_argument("--width", type=int, default=100, help="cut each line to this many characters")
     au.add_argument("--no-script-tests", action="store_true", help="as for analyze")
-    cmp_ = sub.add_parser("compare", help="compare class shares of two --json reports")
-    cmp_.add_argument("a", type=Path)
-    cmp_.add_argument("b", type=Path)
-    cmp_.add_argument("--names", nargs=2, default=("A", "B"), metavar=("NAME_A", "NAME_B"))
-    c = sub.add_parser("convert", help="rewrite trajectory files as generic JSONL")
-    c.add_argument("paths", nargs="+", type=Path)
-    c.add_argument("--format", default="auto", choices=("auto", *FORMATS))
+    cmp_ = add("compare", "compare class shares of two --json reports")
+    cmp_.add_argument("a", type=Path, help="first report (from analyze --json)")
+    cmp_.add_argument("b", type=Path, help="second report")
+    cmp_.add_argument(
+        "--names",
+        nargs=2,
+        default=("A", "B"),
+        metavar=("NAME_A", "NAME_B"),
+        help="column names for the two reports",
+    )
+    c = add("convert", "rewrite trajectory files as generic JSONL")
+    c.add_argument("paths", nargs="+", type=Path, help="trajectory files")
+    c.add_argument("--format", default="auto", choices=("auto", *FORMATS), help=FORMAT_HELP)
     c.add_argument("--out", type=Path, required=True, help="directory for the .jsonl files")
     return p
 
