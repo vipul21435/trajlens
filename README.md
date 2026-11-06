@@ -1,7 +1,17 @@
 # trajlens
 
-Read coding-agent trajectories from several open formats, measure how the agent behaved, and
-label failures with small documented rules that each point at the steps they rest on.
+[![ci](https://github.com/vipul21435/trajlens/actions/workflows/ci.yml/badge.svg)](https://github.com/vipul21435/trajlens/actions/workflows/ci.yml)
+
+trajlens reads coding-agent trajectories (SWE-agent `.traj`, mini-swe-agent, OpenHands events,
+chat and tool-call transcripts, generic JSONL), measures how the agent behaved, and labels
+failures (looping, never tested, untested final edit, gave up, tool-error cascade, context
+blow-up, edited tests, empty submission) with small documented rules that each cite the step
+ids they rest on. Output: text, JSON, CSV and one self-contained HTML page.
+
+On 400 public SWE-agent runs (nebius/SWE-agent-trajectories, CC BY 4.0), a loop of four or more
+repeated steps appears in 29.0 % of unresolved runs against 1.3 % of resolved runs, and an
+untested final edit in 21.6 % against 1.3 %; commands and full tables under
+[Results](#results-on-real-public-data).
 
 ## Why this is hard
 
@@ -24,6 +34,12 @@ pip install git+https://github.com/vipul21435/trajlens
 Python 3.10 or later; no runtime dependencies outside the standard library.
 
 ## Quickstart
+
+The fixtures live in the repository, not in the installed package, so clone it first:
+
+```
+git clone https://github.com/vipul21435/trajlens && cd trajlens
+```
 
 On three of the fixtures in `tests/fixtures/` (two generic JSONL files and one SWE-agent
 `.traj`):
@@ -89,6 +105,23 @@ gate a CI job. A file that cannot be read stops the command with a one-line mess
 the file; `--skip-bad` lists such files on stderr (and under `skipped` in the JSON) and goes
 on with the rest. `trajlens convert RUN... --out DIR` rewrites any supported input as generic
 JSONL.
+
+From Python (the report is the same dict `--json` writes):
+
+```python
+from trajlens import Options, analyze_trajectories, load
+
+report = analyze_trajectories([load("tests/fixtures/loop.jsonl")], Options(), steps=True)
+for finding in report["runs"][0]["findings"]:
+    print(finding["label"], finding["step_ids"])
+```
+
+```
+looping [2, 3, 4, 5, 6]
+never_tested [1]
+gave_up [6]
+tool_error_cascade [2, 3, 4, 5, 6]
+```
 
 The example script analyses every fixture and writes both reports:
 
