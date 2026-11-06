@@ -8,7 +8,8 @@ Recognised keys (all optional except ``action`` or ``command``):
 ``command``       the command string, for example ``pytest tests/``
 ``observation``   what came back from the environment
 ``exit_code``     integer exit status of the command
-``timestamp``     seconds since the epoch, float
+``timestamp``     seconds since the epoch (a number), or an ISO 8601 string
+                  such as ``2026-01-02T10:00:00Z``
 ``tokens_in``     prompt tokens for the step
 ``tokens_out``    completion tokens for the step
 ``tool``          optional tool class (edit, test, read, search, shell,
@@ -31,6 +32,7 @@ from __future__ import annotations
 import json
 import math
 import re
+from datetime import datetime
 from pathlib import Path
 
 from trajlens.model import (
@@ -257,6 +259,26 @@ def _opt_float(value: object) -> float | None:
     return out if math.isfinite(out) else None
 
 
+def parse_stamp(value: object) -> float | None:
+    """Seconds since the epoch from a number, a numeric string or an ISO 8601 string.
+
+    A trailing ``Z`` means UTC; a stamp without a zone is read as local time,
+    which leaves durations (differences) unchanged. Anything else is None.
+    """
+    if isinstance(value, str):
+        text = value.strip()
+        number = _opt_float(text)
+        if number is not None:
+            return number
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            return None
+    if isinstance(value, bool):
+        return None
+    return _opt_float(value)
+
+
 def step_from_record(index: int, rec: dict) -> Step:
     """Build one Step from a generic JSONL record."""
     action = str(rec.get("action", "") or "")
@@ -271,7 +293,7 @@ def step_from_record(index: int, rec: dict) -> Step:
         thought=str(rec.get("thought", "") or ""),
         observation=str(rec.get("observation", "") or ""),
         exit_code=_opt_int(rec.get("exit_code")),
-        timestamp=_opt_float(rec.get("timestamp")),
+        timestamp=parse_stamp(rec.get("timestamp")),
         tokens_in=_opt_int(rec.get("tokens_in")),
         tokens_out=_opt_int(rec.get("tokens_out")),
         raw_action=action,

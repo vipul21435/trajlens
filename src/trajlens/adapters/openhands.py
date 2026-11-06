@@ -31,10 +31,9 @@ when the file is an object, otherwise it stays empty.
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from pathlib import Path
 
-from trajlens.adapters.generic import _opt_int, classify_tool
+from trajlens.adapters.generic import _opt_int, classify_tool, parse_stamp
 from trajlens.model import EDIT, OTHER, READ, SHELL, SUBMIT, Step, Trajectory
 
 _ACTION_TOOL = {
@@ -51,17 +50,6 @@ _ACTION_TOOL = {
     "delegate": OTHER,
     "reject": OTHER,
 }
-
-
-def _stamp(value) -> float | None:
-    if value is None:
-        return None
-    if isinstance(value, int | float):
-        return float(value)
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
-    except ValueError:
-        return None
 
 
 def _usage(event: dict) -> tuple[int | None, int | None, bool]:
@@ -177,7 +165,7 @@ def parse_openhands(data: object, run_id: str) -> Trajectory:
                 thought=_thought(name, args, e),
                 observation=str(obs.get("content") or ""),
                 exit_code=exit_code,
-                timestamp=_stamp(e.get("timestamp")),
+                timestamp=parse_stamp(e.get("timestamp")),
                 tokens_in=tin,
                 tokens_out=tout,
                 raw_action=name,

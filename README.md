@@ -149,7 +149,7 @@ stays `None`.
 | `toolcalls` | a function-calling transcript: `assistant` messages with `tool_calls` (`function.name`, `function.arguments`), `tool` replies matched by `tool_call_id`; one step per call; shell exit code from OpenHands' `[Command finished with exit code N]` line (-1 for its timeout notice, 1 for `[Error occurred in processing last action]`), editor replies starting with `ERROR` count as failures | a message list, or an object whose `trajectory` is one, where some message has `tool_calls` |
 
 Generic JSONL: one step per line with any of `thought`, `action`, `command`, `observation`,
-`exit_code`, `timestamp` (epoch seconds), `tokens_in`, `tokens_out`, and optionally `tool`
+`exit_code`, `timestamp` (epoch seconds or an ISO 8601 string), `tokens_in`, `tokens_out`, and optionally `tool`
 (one of the classes below). A line with `"type": "meta"` carries `run_id`, `task_id`,
 `model`, `patch`, `exit_status` and `resolved` (true/false or 1/0; a null field keeps its default); a line with
 `"type": "patch"` carries the final diff.
