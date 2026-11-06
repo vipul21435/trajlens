@@ -33,12 +33,25 @@ def test_newcombe_properties():
         assert math.isclose(d2, -d) and math.isclose(lo2, -hi) and math.isclose(hi2, -lo)
 
 
-def test_newcombe_regression_value():
-    # 56/70 against 48/80: difference 0.2; the interval below is this
-    # implementation's output, kept to catch accidental changes.
+def test_newcombe_closed_form_by_hand():
+    # 56/70 against 48/80, worked step by step outside the implementation.
+    # Wilson limits with z = 1.96, from (p + z^2/2n +- z sqrt(p(1-p)/n + z^2/4n^2)) / (1 + z^2/n):
+    # (centre and half-width below are already divided by 1 + z^2/n)
+    #   56/70: p = 0.8, 1 + z^2/n = 1.05488, centre 0.78439, half 0.09256 -> [0.6918, 0.8770]
+    #   48/80: p = 0.6, 1 + z^2/n = 1.04802, centre 0.59542, half 0.10496 -> [0.4905, 0.7004]
+    # Hybrid score limits for d = 0.8 - 0.6 = 0.2:
+    #   lower = 0.2 - sqrt((0.8 - 0.6918)^2 + (0.7004 - 0.6)^2) = 0.2 - 0.1476 = 0.0524
+    #   upper = 0.2 + sqrt((0.8770 - 0.8)^2 + (0.6 - 0.4905)^2) = 0.2 + 0.1339 = 0.3339
+    lo1, hi1 = wilson(56, 70)
+    lo2, hi2 = wilson(48, 80)
+    assert abs(lo1 - 0.6918) < 1e-4 and abs(hi1 - 0.8770) < 1e-4
+    assert abs(lo2 - 0.4905) < 1e-4 and abs(hi2 - 0.7004) < 1e-4
+    lower = 0.2 - math.sqrt((0.8 - 0.6918) ** 2 + (0.7004 - 0.6) ** 2)
+    upper = 0.2 + math.sqrt((0.8770 - 0.8) ** 2 + (0.6 - 0.4905) ** 2)
     d, lo, hi = newcombe_diff(48, 80, 56, 70)
     assert math.isclose(d, 0.2)
-    assert abs(lo - 0.0524) < 5e-4 and abs(hi - 0.3339) < 5e-4
+    assert abs(lo - lower) < 2e-4 and abs(hi - upper) < 2e-4
+    assert abs(lo - 0.0524) < 1e-4 and abs(hi - 0.3339) < 1e-4
 
 
 def test_newcombe_coverage_simulation():
