@@ -10,7 +10,9 @@ or ``user``), ``message`` and either
   carries ``args.code``; ``edit``, ``write`` and ``read`` carry ``args.path``;
   ``finish``, ``message`` and ``think`` carry text), or
 * ``observation`` with ``content``, ``extras`` and ``cause`` (the id of the
-  action it answers). A ``run`` observation carries ``extras.exit_code``.
+  action it answers). A ``run`` observation carries ``extras.exit_code``;
+  later releases (0.40.0 was checked) keep it in ``extras.metadata.exit_code``
+  instead, which is read when the first is missing.
 
 A file holding an object with an ``events`` or ``history`` list is accepted
 too. Only agent actions become steps; user messages and system events are
@@ -104,6 +106,14 @@ def _is_key(value: object) -> bool:
     return isinstance(value, int | str) and not isinstance(value, bool)
 
 
+def _exit_code(extras: dict) -> int | None:
+    """``extras.exit_code``, else ``extras.metadata.exit_code`` (the newer shape)."""
+    code = _opt_int(extras.get("exit_code"))
+    if code is None and isinstance(extras.get("metadata"), dict):
+        code = _opt_int(extras["metadata"].get("exit_code"))
+    return code
+
+
 def _next_free_observation(events: list[dict], pos: int) -> dict | None:
     """The first observation after ``events[pos]`` that names no other action as its cause.
 
@@ -157,10 +167,8 @@ def parse_openhands(data: object, run_id: str) -> Trajectory:
             tool = classify_tool("bash" if tool == SHELL else name, command)
         if name in ("edit", "write"):
             tool = EDIT
-        if obs.get("observation") == "error" and extras.get("exit_code") is None:
-            exit_code = 1
-        else:
-            exit_code = _opt_int(extras.get("exit_code"))
+        code = _exit_code(extras)
+        exit_code = 1 if obs.get("observation") == "error" and code is None else code
         traj.steps.append(
             Step(
                 index=len(traj.steps),
