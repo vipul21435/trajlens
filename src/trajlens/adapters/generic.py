@@ -128,6 +128,27 @@ _ACTION_CLASS = {
 }
 
 
+# The file editor tool of SWE-agent 1.x and of tool-calling agents takes a
+# sub-command: ``view`` only reads, the others (create, str_replace, insert,
+# undo_edit) change files.
+EDITOR_ACTIONS = ("str_replace_editor", "str_replace_based_edit_tool")
+
+
+def _editor_class(name: str, cmd: str) -> str | None:
+    """READ or EDIT for a file-editor call, None when the step is not one.
+
+    The sub-command is the token after the editor name in ``cmd``, or the
+    first token of ``cmd`` when the action name alone names the editor.
+    """
+    tokens = cmd.split()
+    if tokens and tokens[0].lower() in EDITOR_ACTIONS:
+        tokens = tokens[1:]
+    elif name not in EDITOR_ACTIONS:
+        return None
+    sub = tokens[0].lower() if tokens else ""
+    return READ if sub == "view" else EDIT
+
+
 _HEREDOC_RE = re.compile(r"<<-?\s*[\"']?(\w+)[\"']?")
 
 
@@ -170,7 +191,11 @@ def is_shell_write(command: str) -> bool:
 def classify_tool(action: str, command: str) -> str:
     """Map an action name and its command to one tool class.
 
-    The action name wins when it is a known editor, reader or submit action.
+    A file-editor call (``str_replace_editor`` or
+    ``str_replace_based_edit_tool``, as the action name or the command's first
+    word) is ``read`` for its ``view`` sub-command and ``edit`` otherwise.
+    Otherwise the action name wins when it is a known editor, reader or submit
+    action.
     A shell action is looked at by its command: a test runner, or a python
     test or reproduction script (``test_*.py``, ``*_test.py``,
     ``reproduce*.py``, ``repro*.py``), is ``test``, an
@@ -183,6 +208,9 @@ def classify_tool(action: str, command: str) -> str:
     """
     name = (action or "").strip().lower()
     cmd = (command or "").strip()
+    editor = _editor_class(name, cmd)
+    if editor is not None:
+        return editor
     known = _ACTION_CLASS.get(name)
     if known is not None and known != SHELL:
         return known

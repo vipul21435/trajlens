@@ -7,8 +7,8 @@ other program, but the trajectory can: if the agent created the file earlier
 in the same run, running it is the agent testing its own work.
 
 A file counts as created by the agent when an edit step's command is
-``create <path>`` or ``write <path>`` (SWE-agent, the OpenHands editor and
-event stream), or any step writes it with a redirect or tee
+``create <path>``, ``write <path>`` or ``str_replace_editor create <path>``
+(SWE-agent, the OpenHands editor and event stream), or any step writes it with a redirect or tee
 (``cat > check.py``, ``cat << EOF > check.py``, ``echo ... > check.py``,
 ``tee check.py``), whatever class the step was given.
 A later shell step running ``python <path>`` (any flags, any directory
@@ -24,7 +24,10 @@ from pathlib import PurePosixPath
 from trajlens.adapters.generic import strip_heredocs
 from trajlens.model import EDIT, SHELL, TEST, Step, Trajectory
 
-_CREATE_RE = re.compile(r"^\s*(?:create|write)\s+[\"']?([^\s\"']+)")
+_CREATE_RE = re.compile(
+    r"^\s*(?:(?:str_replace_editor|str_replace_based_edit_tool)\s+)?(?:create|write)\s+"
+    r"[\"']?([^\s\"']+)"
+)
 _REDIRECT_RE = re.compile(r">\s*[\"']?([^\s\"'|;&]+\.py)\b")
 _TEE_RE = re.compile(r"(?:^|[|;&\s])tee\s+(?:-\S+\s+)*[\"']?([^\s\"'|;&]+\.py)\b")
 _RUN_RE = re.compile(r"(?:^|[\s;&|])python[0-9.]*\s+(?:-\S+\s+)*[\"']?([^\s\"';&|]+\.py)\b")
