@@ -142,6 +142,7 @@ def test_observation_looks_failed():
     assert observation_looks_failed("bash: foo: command not found")
     assert observation_looks_failed("cat: a.txt: No such file or directory")
     assert observation_looks_failed("Your proposed edit has introduced new syntax error(s).")
+    assert observation_looks_failed("Your output was not formatted correctly. You must")
     assert not observation_looks_failed("All 3 tests passed")
     assert not observation_looks_failed("")
 

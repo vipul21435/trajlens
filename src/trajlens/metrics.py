@@ -33,6 +33,7 @@ ERROR_PATTERNS: tuple[str, ...] = (
     r": command not found$",
     r": No such file or directory$",
     r"Your proposed edit has introduced new syntax error",
+    r"^Your output was not formatted correctly",
     r"^Usage: ",
 )
 _ERROR_RE = re.compile("|".join(f"(?:{p})" for p in ERROR_PATTERNS), re.MULTILINE)
