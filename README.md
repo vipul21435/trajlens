@@ -77,11 +77,16 @@ row74386 (chat): 13 steps, resolved False, exit status submitted
 ```
 
 The agent edited lines 350 to 358 six times in a row, five times with identical text;
-SWE-agent rejected each attempt (the failures are
-inferred from its syntax-error message, since the format has no exit codes), and the run
-submitted without ever running code.
+SWE-agent rejected each attempt (the failures are inferred from its syntax-error message,
+since the format has no exit codes), and the run submitted without ever running code.
 
-`trajlens convert RUN... --out DIR` rewrites any supported input as generic JSONL.
+Other outputs and switches: `--csv runs.csv` writes one row per run (scalar metrics and a
+0/1 column per class) for a spreadsheet or a dataframe; `--group-by model` (or
+`source_format`, `exit_status`, `task_id`) repeats the class counts per group, in the text
+output and in the HTML report; `--fail-on looping,edited_tests` (or `any`) makes the command
+exit with status 1 when any run carries one of the named classes, so a batch of agent runs can
+gate a CI job. `trajlens convert RUN... --out DIR` rewrites any supported input as generic
+JSONL.
 
 The example script analyses every fixture and writes both reports:
 
@@ -174,9 +179,11 @@ one long directory, repeats a command but brings new information each time; the 
 rejected with the same error, or the same search with the same empty answer, does not.
 `--loop-any-observation` turns this off.
 
-Both refinements came from reading findings on the real sample below, and their effect on the
-`looping` class over its 400 runs is (`trajlens analyze --format chat nebius-sample/row*.json`
-with the flags shown):
+Both refinements came from reading findings on the real sample below: the edit reset from the
+100 tuning rows, the observation check from a first read of 12 held-out `looping` findings
+(seed 7), two of which were `scroll_down` paging through a file. For this class the held-out
+rows are therefore not untouched. The effect on the `looping` class over all 400 runs
+(`trajlens analyze --format chat nebius-sample/row*.json` with the flags shown):
 
 | flags | resolved runs with looping (of 76) | unresolved runs with looping (of 324) |
 | --- | --- | --- |
@@ -215,11 +222,14 @@ applies the task's test patch over the agent's before running them (`swebench/ha
 github.com/SWE-bench/SWE-bench), so edits to existing test files are at best overwritten and at
 worst a sign of making tests pass without fixing the code. `context_blow_up` counts the total of
 all observations because an agent framework keeps the history in the prompt, so it is the
-total, not the largest single output, that exhausts the context window; the first version
-used an observation-growth ratio, and on the real sample the runs that the framework stopped
-for context length had lower growth than the others, so the rule was replaced. The 60000
+total, not the largest single output, that exhausts the context window. The first version used
+an observation-growth ratio (threshold 5.0) instead; on the 100 tuning rows none of the 18 runs
+the framework stopped for context length had growth above 3.7 or a single observation above
+8,400 characters, so that rule missed all of them, and it was replaced. The 60000
 default was set by looking at the first 100 rows of the sample (every run stopped for context
-had at least 61065 characters of observations) and is then checked on the 300 rows held out.
+had at least 61,065 characters of observations; the most any other run had was 76,830) and is
+then checked on the 300 rows held out. These figures come from the `--csv` output of
+`trajlens analyze --format chat` on the 100 lowest-offset rows, filtered on `exit_status`.
 `gave_up` and `empty_submission` separate a run that stopped from one that submitted nothing.
 
 ## Results on real public data
