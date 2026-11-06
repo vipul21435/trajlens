@@ -11,8 +11,9 @@ guessed from the file name and, for ``.json``, from the document shape:
   ``observation`` keys, or an object with ``events``/``history`` holding such
   events, is OpenHands; an object with ``trajectory`` is SWE-agent.
 
-The ``chat`` format (a model transcript with fenced commands) is never
-guessed, because its shape overlaps the others; pass ``--format chat``.
+The ``chat`` format (a model transcript with fenced commands) and the
+``toolcalls`` format (a function-calling transcript) are never guessed,
+because their shape overlaps the others; pass ``--format``.
 """
 
 from __future__ import annotations
@@ -25,9 +26,10 @@ from trajlens.adapters.generic import load_generic
 from trajlens.adapters.minisweagent import load_minisweagent, parse_minisweagent
 from trajlens.adapters.openhands import load_openhands, parse_openhands
 from trajlens.adapters.sweagent import load_sweagent, parse_sweagent
+from trajlens.adapters.toolcalls import load_toolcalls, parse_toolcalls
 from trajlens.model import Trajectory
 
-FORMATS = ("generic", "sweagent", "minisweagent", "openhands", "chat")
+FORMATS = ("generic", "sweagent", "minisweagent", "openhands", "chat", "toolcalls")
 
 _LOADERS = {
     "generic": load_generic,
@@ -35,6 +37,7 @@ _LOADERS = {
     "minisweagent": load_minisweagent,
     "openhands": load_openhands,
     "chat": load_chat,
+    "toolcalls": load_toolcalls,
 }
 
 
@@ -109,4 +112,6 @@ __all__ = [
     "parse_minisweagent",
     "parse_openhands",
     "parse_sweagent",
+    "load_toolcalls",
+    "parse_toolcalls",
 ]
