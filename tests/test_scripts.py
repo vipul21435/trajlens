@@ -59,7 +59,16 @@ def test_report_script_on_tiny_sample(tmp_path, capsys, monkeypatch):
     assert "tuning rows 1, held-out rows 1" in out
     assert "| gave_up | 1/1 = 100.0%" in out
     assert "context_blow_up vs exit_context | held-out" in out
+    # No failure was read from text, so the labels drop "(inferred)".
+    assert "| mean error rate | 0.000 |" in out and "(inferred)" not in out
+    assert "nan" not in out
     monkeypatch.setattr("sys.argv", ["x", str(tmp_path), "--tuning", "0"])
     rd.main()
     out = capsys.readouterr().out
     assert "held-out rows only" not in out and "| gave_up vs not submitted | tuning" not in out
+
+
+def test_num_formats_missing_values():
+    rd = _module("real_data_report")
+    assert rd._num(None) == "-" and rd._num(math.nan, ".2f") == "-"
+    assert rd._num(0.5, ".2f") == "0.50"

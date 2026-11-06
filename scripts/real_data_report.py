@@ -55,19 +55,24 @@ def agreement(runs: list[dict], label: str, truth) -> dict:
 
 
 def _num(value, spec: str = ".1f") -> str:
-    return "-" if value is None else format(value, spec)
+    """Format a number; None and nan (a rule that never fired) print as "-"."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return "-"
+    return format(value, spec)
 
 
 def metrics_table(a: dict, runs: list[dict]) -> list[str]:
     n = len(runs) or 1
     failed_edits = sum(r["metrics"]["failed_edits"] for r in runs) / n
+    # Only say "inferred" when some failure was read from observation text.
+    how = " (inferred)" if any(r["metrics"]["errors_inferred"] for r in runs) else ""
     rows = [
         ("runs", a["runs"]),
         ("mean steps", _num(a["mean_steps"])),
         ("mean edits", _num(a["mean_edits"])),
-        ("mean failed edits (inferred)", _num(failed_edits)),
+        (f"mean failed edits{how}", _num(failed_edits)),
         ("mean test runs", _num(a["mean_test_runs"])),
-        ("mean error rate (inferred)", _num(a["mean_error_rate"], ".3f")),
+        (f"mean error rate{how}", _num(a["mean_error_rate"], ".3f")),
         ("mean first edit step (runs with an edit)", _num(a["mean_first_edit_step"])),
         ("mean first test step (runs with a test)", _num(a["mean_first_test_step"])),
         ("runs with a loop", a["runs_with_loops"]),
@@ -187,7 +192,7 @@ def main() -> None:
             g = agreement(part, label, truth)
             print(
                 f"| {label} vs {tname} | {name} | {g['tp']} | {g['fp']} | {g['fn']} | "
-                f"{g['tn']} | {g['precision']:.2f} | {g['recall']:.2f} |"
+                f"{g['tn']} | {_num(g['precision'], '.2f')} | {_num(g['recall'], '.2f')} |"
             )
     if args.chart:
         chart(

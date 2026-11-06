@@ -394,8 +394,11 @@ trajlens analyze --format toolcalls oh-sample/row*.json --group-by exit_status
 | mean error rate | 0.093 |
 | mean first edit step (runs with an edit) | 24.8 |
 | mean first test step (runs with a test) | 7.9 |
+| runs with a loop | 20 |
 | runs testing after the last edit | 56 |
 | runs submitted | 53 |
+| runs with an empty patch | 0 |
+| runs with no finding | 0 |
 | failed steps by tool class | 354: test 191, search 82, shell 36, edit 24, read 21 |
 | tool mix (share of steps) | edit 16.8%, test 24.3%, read 25.6%, search 14.8%, shell 11.6%, submit 1.4%, other 5.4% |
 
