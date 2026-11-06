@@ -524,6 +524,11 @@ lists, a form that carries no submission field, so the patch is empty.
   prints none of them is a success to trajlens, and a step that prints an old traceback it
   merely displayed (for example `cat`-ing a log) is a failure.
 - Test-file detection is by path only.
+- A shell write counts as an edit only when every command on its first line is `cat`, `echo`,
+  `printf` or `tee`; a file written by `python -c`, by `sed ... > f` or from inside a script
+  is not seen as an edit.
+- Format detection reads the document shape. A chat transcript stored as a bare message list
+  looks like a mini-swe-agent file and is read as one unless `--format chat` is given.
 - A non-zero exit code is a failure even when it is the command's normal answer: `grep` with
   no match exits 1. Of the 82 failed search steps in the OpenHands sample, 72 are `grep`
   commands that exited 1 with no output (counted with a few lines of Python over the loaded

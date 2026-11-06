@@ -24,3 +24,14 @@
 - Scripts to fetch a seeded sample of nebius/SWE-agent-trajectories or
   nebius/SWE-rebench-openhands-trajectories and to report the class shares by outcome with
   Wilson intervals and a matplotlib chart.
+- Review fixes before the first release: `cat`/`echo`/`printf`/`tee` file writes are edits
+  and count as created scripts in any adapter; chat and tool-call rows under a `trajectory`
+  key are detected; the HTML report escapes every `<` in its embedded JSON; OpenHands actions
+  no longer take a later action's observation; malformed files give a one-line error naming
+  the file, and `--skip-bad` goes on past them; observation growth is null instead of
+  infinity and reports are strict JSON; a run with no steps and an empty patch is `gave_up`;
+  deleted, renamed and quoted test paths and Django `tests.py` count for `edited_tests`; a
+  test runner counts only as a command word, with Django's runners added; OpenHands timeout
+  notices are failed steps; analyze thresholds and `--fail-on` are checked up front; null
+  generic meta fields keep their defaults; `load`, `analyze_trajectories` and `Options` are
+  exported from the package.
