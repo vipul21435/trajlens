@@ -410,7 +410,9 @@ Two rules do not transfer as they stand:
 - `context_blow_up` fires on all 60 runs. The median run shows 150,582 characters of
   observations (25,436 in the SWE-agent sample) and its largest single observation is 30,047
   characters (4,496), so the 60,000-character default chosen on SWE-agent data means nothing
-  for this scaffold; `--context-chars` has to be set per framework.
+  for this scaffold; `--context-chars` has to be set per framework. (Medians of the
+  `observation_chars` and `largest_observation_chars` columns of `trajlens analyze --csv` on
+  each sample, rounded to whole characters.)
 - `gave_up` catches none of the 7 runs that did not end with the finish action (6 stopped at
   the 100-iteration limit, 1 by the framework's own stuck-in-a-loop detector): the dataset's
   patch field is never empty in this sample, even for runs that stopped early, and none of
@@ -473,8 +475,9 @@ lists, a form that carries no submission field, so the patch is empty.
 - Test-file detection is by path only.
 - A non-zero exit code is a failure even when it is the command's normal answer: `grep` with
   no match exits 1. Of the 82 failed search steps in the OpenHands sample, 72 are `grep`
-  commands that exited 1 with no output (counted with a short script over the step list, not
-  a CLI command).
+  commands that exited 1 with no output (counted with a few lines of Python over the loaded
+  steps: tool `search`, exit code 1, `grep` in the command, nothing before OpenHands' status
+  lines).
 - No class for running out of budget (iteration, cost or time limit); such runs are labelled
   only by what they did before the limit.
 - Near-duplicate detection compares strings, so two commands that do the same thing but look
