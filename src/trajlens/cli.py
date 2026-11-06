@@ -1,6 +1,6 @@
 """Command line entry point.
 
-trajlens analyze RUN [RUN ...] [--json OUT] [--html OUT] [--format NAME]
+trajlens analyze RUN [RUN ...] [--json OUT] [--html OUT] [--format NAME] [--fail-on CLASSES]
 trajlens convert RUN [RUN ...] --out DIR [--format NAME]
 trajlens show RUN [--format NAME] [--width N]
 """
@@ -16,6 +16,7 @@ from trajlens import __version__
 from trajlens.adapters import FORMATS, load
 from trajlens.adapters.generic import dump_generic
 from trajlens.analysis import GROUP_KEYS, Options, aggregate, analyze_paths, analyze_run
+from trajlens.classify import FAILURE_CLASSES
 from trajlens.html import render_html
 from trajlens.metrics import INFER_MODES
 
@@ -81,6 +82,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--html", type=Path, help="write a self-contained HTML report here (adds step rows)"
     )
     a.add_argument("--title", default="trajlens report", help="title of the HTML report")
+    a.add_argument(
+        "--fail-on",
+        metavar="CLASSES",
+        help="exit with status 1 when any run carries one of these comma-separated classes "
+        "('any' for every class)",
+    )
     a.add_argument("--group-by", choices=GROUP_KEYS, help="also count findings per value of this")
     a.add_argument("--window", type=int, default=6, help="loop window in steps")
     a.add_argument("--min-repeats", type=int, default=3, help="repeats that make a loop")
@@ -215,6 +222,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.html:
         args.html.write_text(render_html(report, args.title), encoding="utf-8")
     print(format_text(report))
+    if args.fail_on:
+        wanted = set(FAILURE_CLASSES) if args.fail_on == "any" else set(args.fail_on.split(","))
+        unknown = wanted - set(FAILURE_CLASSES)
+        if unknown:
+            print(f"trajlens: unknown class {', '.join(sorted(unknown))}", file=sys.stderr)
+            return 2
+        hits = [
+            r["metrics"]["run_id"]
+            for r in report["runs"]
+            if wanted & {f["label"] for f in r["findings"]}
+        ]
+        if hits:
+            print(f"failing: {len(hits)} runs carry {', '.join(sorted(wanted))}", file=sys.stderr)
+            return 1
     return 0
 
 

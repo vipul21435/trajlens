@@ -131,3 +131,13 @@ def test_loop_flags_reach_the_metrics(tmp_path, capsys):
     assert "looping" in labels(analyze_paths([p], opts=Options(same_observation=False)))
     assert main(["analyze", str(p), "--loop-any-observation"]) == 0
     assert "looping: exact repeat" in capsys.readouterr().out
+
+
+def test_fail_on(capsys):
+    loop = str(FX / "loop.jsonl")
+    good = str(FX / "good.jsonl")
+    assert main(["analyze", good, "--fail-on", "any"]) == 0
+    assert main(["analyze", loop, good, "--fail-on", "looping,edited_tests"]) == 1
+    assert "failing: 1 runs" in capsys.readouterr().err
+    assert main(["analyze", loop, "--fail-on", "edited_tests"]) == 0
+    assert main(["analyze", loop, "--fail-on", "nonsense"]) == 2
