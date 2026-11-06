@@ -1,7 +1,8 @@
-"""Measure trajlens on the downloaded nebius/SWE-agent-trajectories sample.
+"""Measure trajlens on a sample written by fetch_nebius_sample.py.
 
-    uv run python scripts/real_data_report.py ../_data/trajlens/nebius \
+    uv run python scripts/real_data_report.py nebius-sample \
         --chart docs/images/classes_by_outcome.png
+    uv run python scripts/real_data_report.py oh-sample --format toolcalls --tuning 0
 
 Prints Markdown tables: aggregate behaviour metrics, the share of resolved
 and unresolved runs carrying each failure class (with 95 % Wilson
@@ -18,7 +19,7 @@ import json
 import math
 from pathlib import Path
 
-from trajlens.adapters.chat import load_chat
+from trajlens.adapters import load
 from trajlens.analysis import Options, aggregate, analyze_run
 from trajlens.classify import FAILURE_CLASSES
 
@@ -98,7 +99,7 @@ def class_table(runs: list[dict]) -> list[str]:
     return lines
 
 
-def chart(runs: list[dict], path: Path) -> None:
+def chart(runs: list[dict], path: Path, title: str) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
@@ -123,7 +124,7 @@ def chart(runs: list[dict], path: Path) -> None:
     ax.set_xticks(list(xs))
     ax.set_xticklabels(FAILURE_CLASSES, rotation=30, ha="right", fontsize=8)
     ax.set_ylabel("share of runs with the class")
-    ax.set_title("trajlens failure classes by outcome, nebius/SWE-agent-trajectories sample")
+    ax.set_title(title)
     ax.title.set_fontsize(9)
     ax.legend(fontsize=8, frameon=False)
     ax.spines[["top", "right"]].set_visible(False)
@@ -137,12 +138,13 @@ def main() -> None:
     ap.add_argument("data", type=Path, help="directory written by fetch_nebius_sample.py")
     ap.add_argument("--tuning", type=int, default=100, help="lowest offsets kept for tuning")
     ap.add_argument("--chart", type=Path)
+    ap.add_argument("--format", default="chat", help="trajlens input format of the rows")
     ap.add_argument("--json", type=Path, help="write the full report here")
     args = ap.parse_args()
 
     files = sorted(args.data.glob("row*.json"))
     opts = Options()
-    runs = [analyze_run(load_chat(p), opts, p.name) for p in files]
+    runs = [analyze_run(load(p, args.format), opts, p.name) for p in files]
     tuning, held = runs[: args.tuning], runs[args.tuning :]
     manifest = json.loads((args.data / "MANIFEST.json").read_text())
 
@@ -154,30 +156,35 @@ def main() -> None:
     print("\n".join(metrics_table(aggregate(runs), runs)) + "\n")
     print("Failure classes by outcome, all rows (95 % Wilson intervals):\n")
     print("\n".join(class_table(runs)) + "\n")
-    print("Failure classes by outcome, held-out rows only:\n")
-    print("\n".join(class_table(held)) + "\n")
+    if tuning and held:
+        print("Failure classes by outcome, held-out rows only:\n")
+        print("\n".join(class_table(held)) + "\n")
 
     def ctx(r):
         return "exit_context" in r["exit_status"]
 
     def no_submit(r):
-        return not r["exit_status"].startswith("submitted")
+        return not r["exit_status"].startswith("submit")
 
     print("Agreement with the framework's exit status:\n")
     print("| rule vs status | rows | tp | fp | fn | tn | precision | recall |")
     print("| --- | --- | --- | --- | --- | --- | --- | --- |")
+    checks = [("gave_up", no_submit, "not submitted")]
+    if any(ctx(r) for r in runs):
+        checks.insert(0, ("context_blow_up", ctx, "exit_context"))
     for name, part in (("tuning", tuning), ("held-out", held)):
-        for label, truth, tname in (
-            ("context_blow_up", ctx, "exit_context"),
-            ("gave_up", no_submit, "not submitted"),
-        ):
+        if not part:
+            continue
+        for label, truth, tname in checks:
             g = agreement(part, label, truth)
             print(
                 f"| {label} vs {tname} | {name} | {g['tp']} | {g['fp']} | {g['fn']} | "
                 f"{g['tn']} | {g['precision']:.2f} | {g['recall']:.2f} |"
             )
     if args.chart:
-        chart(runs, args.chart)
+        chart(
+            runs, args.chart, f"trajlens failure classes by outcome, {manifest['dataset']} sample"
+        )
         print(f"\nchart: {args.chart}")
     if args.json:
         rep = {"runs": runs, "aggregate": aggregate(runs)}

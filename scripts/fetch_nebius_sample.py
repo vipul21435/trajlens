@@ -1,13 +1,21 @@
-"""Download a seeded random sample of the nebius/SWE-agent-trajectories dataset.
+"""Download a seeded random sample of a nebius trajectory dataset.
 
-The dataset (CC BY 4.0, https://huggingface.co/datasets/nebius/SWE-agent-trajectories)
-holds 80,036 SWE-agent runs with the final patch and whether the task's tests
-passed on it (``target``). Rows are read through the public Hugging Face
-datasets-server ``/rows`` endpoint, so no parquet shard is downloaded. Each
-row is written as one JSON file that ``trajlens analyze --format chat`` reads;
-the ``eval_logs`` column is dropped to keep the sample small.
+Two datasets are known, both CC BY 4.0:
 
-    uv run python scripts/fetch_nebius_sample.py --out ../_data/trajlens/nebius
+``swe-agent``  nebius/SWE-agent-trajectories, 80,036 SWE-agent runs with the
+               final patch and whether the task's tests passed on it
+               (``target``); read with ``trajlens analyze --format chat``.
+``openhands``  nebius/SWE-rebench-openhands-trajectories, 67,074 OpenHands
+               function-calling runs with ``model_patch`` and ``resolved``;
+               read with ``trajlens analyze --format toolcalls``.
+
+Rows are read through the public Hugging Face datasets-server ``/rows``
+endpoint, so no parquet shard is downloaded. Each row is written as one JSON
+file; columns trajlens does not read (test logs, tool schemas) are dropped to
+keep the sample small.
+
+    uv run python scripts/fetch_nebius_sample.py --out nebius-sample
+    uv run python scripts/fetch_nebius_sample.py --dataset openhands --blocks 20 --out oh-sample
 
 Standard library only.
 """
@@ -22,15 +30,17 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-DATASET = "nebius/SWE-agent-trajectories"
 ROWS_URL = "https://datasets-server.huggingface.co/rows"
 LICENCE = "CC BY 4.0"
-PAGE = "https://huggingface.co/datasets/nebius/SWE-agent-trajectories"
+DATASETS = {
+    "swe-agent": ("nebius/SWE-agent-trajectories", ("eval_logs",)),
+    "openhands": ("nebius/SWE-rebench-openhands-trajectories", ("tools",)),
+}
 
 
-def fetch_rows(offset: int, length: int, retries: int = 8) -> dict:
+def fetch_rows(dataset: str, offset: int, length: int, retries: int = 8) -> dict:
     query = urllib.parse.urlencode(
-        {"dataset": DATASET, "config": "default", "split": "train", "offset": offset,
+        {"dataset": dataset, "config": "default", "split": "train", "offset": offset,
          "length": length}
     )  # fmt: skip
     delay = 5.0
@@ -53,13 +63,15 @@ def fetch_rows(offset: int, length: int, retries: int = 8) -> dict:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
+    ap.add_argument("--dataset", choices=sorted(DATASETS), default="swe-agent")
     ap.add_argument("--blocks", type=int, default=100, help="random starting offsets")
     ap.add_argument("--block-size", type=int, default=4, help="consecutive rows per offset")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--pause", type=float, default=1.5, help="seconds between requests")
     args = ap.parse_args()
 
-    first = fetch_rows(0, 1)
+    dataset, drop = DATASETS[args.dataset]
+    first = fetch_rows(dataset, 0, 1)
     total = int(first["num_rows_total"])
     rng = random.Random(args.seed)
     starts = sorted(rng.sample(range(0, total - args.block_size), args.blocks))
@@ -70,10 +82,11 @@ def main() -> None:
         if all(p.exists() for p in done):  # resume after an interrupted run
             written.extend(range(start, start + args.block_size))
             continue
-        page = fetch_rows(start, args.block_size)
+        page = fetch_rows(dataset, start, args.block_size)
         for item in page["rows"]:
             row = dict(item["row"])
-            row.pop("eval_logs", None)
+            for col in drop:
+                row.pop(col, None)
             offset = int(item["row_idx"])
             row["run_id"] = f"row{offset:05d}"
             path = args.out / f"row{offset:05d}.json"
@@ -81,8 +94,8 @@ def main() -> None:
             written.append(offset)
         time.sleep(args.pause)
     manifest = {
-        "dataset": DATASET,
-        "page": PAGE,
+        "dataset": dataset,
+        "page": f"https://huggingface.co/datasets/{dataset}",
         "licence": LICENCE,
         "rows_total": total,
         "seed": args.seed,
