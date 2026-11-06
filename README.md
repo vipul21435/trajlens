@@ -245,6 +245,26 @@ then checked on the 300 rows held out. These figures come from the `--csv` outpu
 `trajlens analyze --format chat` on the 100 lowest-offset rows, filtered on `exit_status`.
 `gave_up` and `empty_submission` separate a run that stopped from one that submitted nothing.
 
+### Comparing two reports
+
+`trajlens compare A.json B.json` reads two `--json` reports and gives, for every class, the
+share of runs carrying it in each and the difference B - A with a 95 % interval. A share's
+interval is the Wilson score interval; the difference uses Newcombe's hybrid score interval
+(Newcombe, "Interval estimation for the difference between independent proportions:
+comparison of eleven methods", Statistics in Medicine 17(8), 873-890, 1998), which combines
+the two Wilson intervals (l, u) around the shares pA and pB:
+
+```
+d     = pB - pA
+lower = d - sqrt((pB - lB)^2 + (uA - pA)^2)
+upper = d + sqrt((uB - pB)^2 + (pA - lA)^2)
+```
+
+The tests check that the interval contains d, flips sign when A and B are swapped, and covers
+the true difference in 93 % to 97.5 % of 2,000 simulated draws (pA = 0.30, pB = 0.45,
+nA = 80, nB = 60). Runs are treated as independent samples; when both reports hold the same
+tasks run by two agents, a paired method would be tighter, and none is implemented.
+
 ## Results on real public data
 
 ### SWE-agent: 400 runs from nebius/SWE-agent-trajectories
@@ -397,6 +417,31 @@ Two rules do not transfer as they stand:
   those runs ended on a failed step. Hitting an iteration limit is not covered by any class.
 
 The one run OpenHands stopped as stuck in a loop is labelled `looping` by trajlens too.
+
+### The two samples side by side
+
+```
+$ trajlens analyze --format chat nebius-sample/row*.json --json swe.json
+$ trajlens analyze --format toolcalls oh-sample/row*.json --json oh.json
+$ trajlens compare swe.json oh.json --names swe-agent openhands
+class                       swe-agent        openhands   openhands - swe-agent [95% interval]
+looping                 95/400  23.8%      8/60  13.3%    -10.4% [ -18.2%,   +1.1%]
+never_tested           100/400  25.0%      0/60   0.0%    -25.0% [ -29.5%,  -17.8%] *
+untested_final_edit     71/400  17.8%      4/60   6.7%    -11.1% [ -16.8%,   -1.2%] *
+gave_up                 35/400   8.8%      0/60   0.0%     -8.8% [ -11.9%,   -2.3%] *
+tool_error_cascade      63/400  15.8%      0/60   0.0%    -15.8% [ -19.6%,   -8.9%] *
+context_blow_up        117/400  29.2%     60/60 100.0%    +70.8% [ +63.2%,  +75.0%] *
+edited_tests             8/400   2.0%      3/60   5.0%     +3.0% [  -0.8%,  +11.8%]
+empty_submission        14/400   3.5%      0/60   0.0%     -3.5% [  -5.8%,   +2.7%]
+* interval excludes zero
+```
+
+This is not a controlled comparison: the scaffolds, models, task sets and the way failures
+are recorded all differ, and the `context_blow_up` row only shows that the default threshold
+does not fit the OpenHands runs. What it does show is the behaviour gap the per-sample tables
+suggest: the OpenHands runs always tested something and never hit a streak of four failed
+steps, where a quarter of the SWE-agent runs never ran a check and one in six had such a
+streak.
 
 ### Other formats
 

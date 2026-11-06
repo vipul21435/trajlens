@@ -13,12 +13,14 @@
   and test, tests after the last edit, exact and near-duplicate loops (an edit between repeats
   ends a loop, and repeats must also bring a similar observation),
   error rate and streaks (with failures inferred from observation text when a format has no
-  exit codes), observation size and growth, patch files, test files and created files.
+  exit codes), runs of scripts the agent created counted as test runs, observation size and growth, patch files, test files and created files.
 - Failure classes with evidence step ids: looping, never_tested, untested_final_edit,
   gave_up, tool_error_cascade, context_blow_up, edited_tests, empty_submission.
 - Aggregate report with a resolved/unresolved split and `--group-by`; JSON, CSV and one
   self-contained HTML report; `--fail-on` exit status; `trajlens show` for one run step by
-  step; `trajlens convert` to generic JSONL.
+  step; `trajlens audit` for a seeded sample of runs carrying one class; `trajlens compare`
+  for class-share differences between two reports with Newcombe intervals; `trajlens
+  convert` to generic JSONL.
 - Scripts to fetch a seeded sample of nebius/SWE-agent-trajectories or
   nebius/SWE-rebench-openhands-trajectories and to report the class shares by outcome with
   Wilson intervals and a matplotlib chart.

@@ -4,6 +4,7 @@ trajlens analyze RUN [RUN ...] [--json OUT] [--html OUT] [--format NAME] [--fail
 trajlens convert RUN [RUN ...] --out DIR [--format NAME]
 trajlens show RUN [--format NAME] [--width N]
 trajlens audit RUN [RUN ...] --label CLASS [--n 20] [--seed 0] [--format NAME]
+trajlens compare A.json B.json [--names A B]
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from trajlens.analysis import (
     write_csv,
 )
 from trajlens.classify import FAILURE_CLASSES
+from trajlens.compare import compare_reports, format_comparison
 from trajlens.html import render_html
 from trajlens.metrics import INFER_MODES
 
@@ -148,6 +150,10 @@ def build_parser() -> argparse.ArgumentParser:
     au.add_argument("--format", default="auto", choices=("auto", *FORMATS))
     au.add_argument("--width", type=int, default=100)
     au.add_argument("--no-script-tests", action="store_true", help="as for analyze")
+    cmp_ = sub.add_parser("compare", help="compare class shares of two --json reports")
+    cmp_.add_argument("a", type=Path)
+    cmp_.add_argument("b", type=Path)
+    cmp_.add_argument("--names", nargs=2, default=("A", "B"), metavar=("NAME_A", "NAME_B"))
     c = sub.add_parser("convert", help="rewrite trajectory files as generic JSONL")
     c.add_argument("paths", nargs="+", type=Path)
     c.add_argument("--format", default="auto", choices=("auto", *FORMATS))
@@ -241,6 +247,16 @@ def main(argv: list[str] | None = None) -> int:
         for run in drawn:
             print()
             print(format_run(run, args.width))
+        return 0
+    if args.cmd == "compare":
+        try:
+            a = json.loads(args.a.read_text(encoding="utf-8"))
+            b = json.loads(args.b.read_text(encoding="utf-8"))
+            rows = compare_reports(a, b)
+        except (OSError, ValueError, KeyError) as exc:
+            print(f"trajlens: {exc}", file=sys.stderr)
+            return 2
+        print(format_comparison(rows, *args.names))
         return 0
     if args.cmd == "convert":
         try:
