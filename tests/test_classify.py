@@ -110,3 +110,36 @@ def test_loop_detail_is_short():
     t = Trajectory("t", steps)
     f = [x for x in classify_run(t, run_metrics(t)) if x.label == "looping"][0]
     assert "'edit 1:3 ...'" in f.detail and len(f.detail) < 120
+
+
+NEW_AND_OLD = """diff --git a/tests/test_new.py b/tests/test_new.py
+new file mode 100644
+--- /dev/null
++++ b/tests/test_new.py
+@@ -0,0 +1 @@
++def test_x(): pass
+diff --git a/tests/test_old.py b/tests/test_old.py
+--- a/tests/test_old.py
++++ b/tests/test_old.py
+@@ -1 +1 @@
+-assert f() == 1
++assert f() == 2
+"""
+
+
+def test_edited_tests_ignores_created_files():
+    from trajlens.metrics import new_files
+
+    assert new_files(NEW_AND_OLD) == ["tests/test_new.py"]
+    plain = "--- /dev/null\n+++ b/test_repro.py\n@@ -0,0 +1 @@\n+x\n"
+    assert new_files(plain) == ["test_repro.py"]
+    t = Trajectory("t", [Step(index=0, tool="submit", command="submit")], patch=NEW_AND_OLD)
+    m = run_metrics(t)
+    assert m.patch_new_test_files == ["tests/test_new.py"]
+    f = {x.label: x for x in classify_run(t, m)}
+    assert f["edited_tests"].detail == "patch touches tests/test_old.py"
+    only_new = NEW_AND_OLD.split("diff --git a/tests/test_old.py")[0]
+    t2 = Trajectory("t", t.steps, patch=only_new)
+    assert "edited_tests" not in {x.label for x in classify_run(t2, run_metrics(t2))}
+    labels2 = {x.label for x in classify_run(t2, run_metrics(t2), include_new_tests=True)}
+    assert "edited_tests" in labels2

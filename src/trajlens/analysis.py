@@ -30,6 +30,7 @@ class Options:
     cascade_min: int = 4
     blowup_chars: int = 20000
     context_chars: int = 60000
+    include_new_tests: bool = False
     infer_errors: str = "auto"
     edit_resets: bool = True
 
@@ -65,7 +66,13 @@ def analyze_run(
     o = opts or Options()
     m = run_metrics(traj, o.window, o.min_repeats, o.near_threshold, o.infer_errors, o.edit_resets)
     findings = classify_run(
-        traj, m, o.loop_min_steps, o.cascade_min, o.blowup_chars, o.context_chars
+        traj,
+        m,
+        o.loop_min_steps,
+        o.cascade_min,
+        o.blowup_chars,
+        o.context_chars,
+        o.include_new_tests,
     )
     out = {
         "path": path,

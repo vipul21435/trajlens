@@ -73,6 +73,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--context-chars", type=int, default=60000, help="total observation size for blow-up"
     )
     a.add_argument(
+        "--include-new-tests",
+        action="store_true",
+        help="count test files the patch creates as edited tests",
+    )
+    a.add_argument(
         "--no-edit-reset",
         action="store_true",
         help="let repeats of a command span edits (count edit-test cycles as loops)",
@@ -133,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
             context_chars=args.context_chars,
             infer_errors=args.infer_errors,
             edit_resets=not args.no_edit_reset,
+            include_new_tests=args.include_new_tests,
         )
         report = analyze_paths(args.paths, args.format, opts, steps=args.html is not None)
     except (OSError, ValueError) as exc:

@@ -123,6 +123,7 @@ class RunMetrics:
     last_test_step: int | None
     patch_files: list[str]
     patch_test_files: list[str]
+    patch_new_test_files: list[str]
     patch_touches_tests: bool
     patch_empty: bool
     submitted: bool
@@ -153,6 +154,27 @@ def patch_paths(patch: str) -> list[str]:
             if p != "/dev/null" and p not in seen:
                 seen.append(p)
     return seen
+
+
+def new_files(patch: str) -> list[str]:
+    """Paths the diff creates (``new file mode`` or ``--- /dev/null``)."""
+    patch = patch.replace("\r", "")
+    out: list[str] = []
+    current = None
+    prev = ""
+    for line in patch.splitlines():
+        m = _DIFF_PATH_RE.match(line)
+        if m:
+            current = m.group(2)
+        elif line.startswith("new file mode") and current and current not in out:
+            out.append(current)
+        elif line.startswith("+++ ") and prev == "--- /dev/null":
+            path = line[4:].strip()
+            path = path[2:] if path.startswith("b/") else path
+            if path not in out:
+                out.append(path)
+        prev = line
+    return out
 
 
 def is_test_path(path: str) -> bool:
@@ -315,6 +337,8 @@ def run_metrics(
         tests_after = last_test is not None and last_test > last_edit
     files = patch_paths(traj.patch)
     test_files = [p for p in files if is_test_path(p)]
+    created = set(new_files(traj.patch))
+    new_test_files = [p for p in test_files if p in created]
     stamps = [s.timestamp for s in steps if s.timestamp is not None]
     duration = (max(stamps) - min(stamps)) if len(stamps) >= 2 else None
     tin = [s.tokens_in for s in steps if s.tokens_in is not None]
@@ -351,6 +375,7 @@ def run_metrics(
         last_test_step=last_test,
         patch_files=files,
         patch_test_files=test_files,
+        patch_new_test_files=new_test_files,
         patch_touches_tests=bool(test_files),
         patch_empty=not traj.patch.strip(),
         submitted=any(s.tool == "submit" for s in steps),

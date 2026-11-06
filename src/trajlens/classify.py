@@ -23,7 +23,10 @@ context_blow_up     the observations together reach ``context_chars`` [60000]
                     ``blowup_chars`` [20000] characters; evidence: the step
                     where the running total crosses the limit and the largest
                     observation step
-edited_tests        the final patch touches a test file; evidence: none (patch
+edited_tests        the final patch modifies or deletes a test file that existed
+                    before the run; a test file the patch creates (a new test
+                    or a reproduction script named test_*.py) does not count
+                    unless ``include_new_tests`` is set; evidence: none (patch
                     level), the file names are listed in the detail
 empty_submission    the run submitted and the patch is empty; evidence: the
                     submit step
@@ -65,7 +68,7 @@ RULES: dict[str, str] = {
     "tool_error_cascade": "at least cascade_min consecutive failed steps",
     "context_blow_up": "observations reach context_chars characters in total, or one "
     "observation has at least blowup_chars",
-    "edited_tests": "the final patch touches a test file",
+    "edited_tests": "the final patch modifies or deletes an existing test file",
     "empty_submission": "a submit step with an empty patch",
 }
 
@@ -87,6 +90,7 @@ def classify_run(
     cascade_min: int = 4,
     blowup_chars: int = 20000,
     context_chars: int = 60000,
+    include_new_tests: bool = False,
 ) -> list[Finding]:
     """Apply every rule to one run and return the findings in rule order."""
     out: list[Finding] = []
@@ -156,8 +160,11 @@ def classify_run(
             ids.append(m.largest_observation_step)
         out.append(Finding("context_blow_up", ", ".join(parts), sorted(ids)))
 
-    if m.patch_touches_tests:
-        out.append(Finding("edited_tests", "patch touches " + ", ".join(m.patch_test_files), []))
+    touched = [
+        p for p in m.patch_test_files if include_new_tests or p not in m.patch_new_test_files
+    ]
+    if touched:
+        out.append(Finding("edited_tests", "patch touches " + ", ".join(touched), []))
 
     if m.submitted and m.patch_empty:
         submit_ids = [s.index for s in steps if s.tool == SUBMIT]
