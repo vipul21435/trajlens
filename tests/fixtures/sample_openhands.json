@@ -1,0 +1,13 @@
+[
+ {"id": 0, "timestamp": "2025-01-01T00:00:00", "source": "user", "message": "Fix add()", "action": "message", "args": {"content": "Fix add()"}},
+ {"id": 1, "timestamp": "2025-01-01T00:00:01", "source": "agent", "message": "Running command", "action": "run", "args": {"command": "cat src/calc.py", "thought": "Read the file."}, "llm_metrics": {"accumulated_token_usage": {"prompt_tokens": 100, "completion_tokens": 10}}},
+ {"id": 2, "timestamp": "2025-01-01T00:00:02", "source": "agent", "message": "", "cause": 1, "observation": "run", "content": "def add(a, b):\n    return a - b\n", "extras": {"command": "cat src/calc.py", "exit_code": 0}},
+ {"id": 3, "timestamp": "2025-01-01T00:00:03", "source": "agent", "message": "", "action": "edit", "args": {"path": "src/calc.py", "thought": "Fix it.", "old_str": "a - b", "new_str": "a + b"}, "llm_metrics": {"accumulated_token_usage": {"prompt_tokens": 250, "completion_tokens": 30}}},
+ {"id": 4, "timestamp": "2025-01-01T00:00:04", "source": "agent", "message": "", "cause": 3, "observation": "edit", "content": "edited", "extras": {"path": "src/calc.py"}},
+ {"id": 5, "timestamp": "2025-01-01T00:00:05", "source": "agent", "message": "", "action": "run", "args": {"command": "pytest -q tests"}, "tool_call_metadata": {"model_response": {"usage": {"prompt_tokens": 300, "completion_tokens": 12}}}},
+ {"id": 6, "timestamp": "2025-01-01T00:00:06", "source": "agent", "message": "", "observation": "error", "content": "boom", "extras": {}},
+ {"id": 7, "timestamp": "2025-01-01T00:00:07", "source": "agent", "message": "", "action": "run_ipython", "args": {"code": "print(1)"}},
+ {"id": 8, "timestamp": "2025-01-01T00:00:08", "source": "agent", "message": "", "action": "think", "args": {"thought": "Nearly done."}},
+ {"id": 9, "timestamp": "2025-01-01T00:00:09", "source": "agent", "message": "All done", "action": "finish", "args": {"final_thought": "Fixed add()", "outputs": {}}},
+ {"id": 10, "timestamp": "2025-01-01T00:00:10", "source": "agent", "message": "", "observation": "agent_state_changed", "content": "", "extras": {"agent_state": "finished"}}
+]

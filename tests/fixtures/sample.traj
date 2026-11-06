@@ -1,0 +1,9 @@
+{"environment": "demo-env", "trajectory": [
+ {"action": "ls -F\n", "observation": "README.md\nsrc/\ntests/\n", "response": "look", "thought": "Look around.", "execution_time": 0.5},
+ {"action": "open src/calc.py\n", "observation": "[File: src/calc.py (3 lines total)]\n1:def add(a, b):\n2:    return a - b\n", "thought": "Open the file.", "execution_time": 0.25},
+ {"action": "edit 2:2\n    return a + b\nend_of_edit\n", "observation": "[File: src/calc.py (3 lines total)]\n", "thought": "Fix the sign.", "execution_time": 1.0},
+ {"action": "pytest tests/ -q\n", "observation": "1 passed\n", "thought": "Run the tests.", "execution_time": 2.0},
+ {"action": "submit\n", "observation": "", "thought": "Done.", "execution_time": 0.25}
+],
+"history": [],
+"info": {"exit_status": "submitted", "submission": "diff --git a/src/calc.py b/src/calc.py\n--- a/src/calc.py\n+++ b/src/calc.py\n@@ -1,2 +1,2 @@\n-    return a - b\n+    return a + b\n", "model_stats": {"tokens_sent": 1200, "tokens_received": 80, "api_calls": 5, "instance_cost": 0.01}}}

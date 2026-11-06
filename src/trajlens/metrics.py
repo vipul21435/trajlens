@@ -91,7 +91,12 @@ class RunMetrics:
 
 
 def patch_paths(patch: str) -> list[str]:
-    """File paths touched by a unified diff, in order, without duplicates."""
+    """File paths touched by a unified diff, in order, without duplicates.
+
+    Carriage returns are dropped first: some agent frameworks store the
+    patch with CRLF line ends, which would hide every path from the regexes.
+    """
+    patch = patch.replace("\r", "")
     seen: list[str] = []
     for m in _DIFF_PATH_RE.finditer(patch):
         p = m.group(2)
@@ -225,6 +230,10 @@ def run_metrics(
     duration = (max(stamps) - min(stamps)) if len(stamps) >= 2 else None
     tin = [s.tokens_in for s in steps if s.tokens_in is not None]
     tout = [s.tokens_out for s in steps if s.tokens_out is not None]
+    # Some formats only carry run totals (SWE-agent model_stats); use them
+    # when no step has its own count.
+    total_in = sum(tin) if tin else traj.extra.get("tokens_in")
+    total_out = sum(tout) if tout else traj.extra.get("tokens_out")
     return RunMetrics(
         run_id=traj.run_id,
         steps=n,
@@ -254,6 +263,6 @@ def run_metrics(
         patch_empty=not traj.patch.strip(),
         submitted=any(s.tool == "submit" for s in steps),
         duration_seconds=duration,
-        tokens_in=sum(tin) if tin else None,
-        tokens_out=sum(tout) if tout else None,
+        tokens_in=total_in,
+        tokens_out=total_out,
     )
